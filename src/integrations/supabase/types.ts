@@ -14,7 +14,129 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      fixed_costs: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          user_id: string
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          cost_price: number
+          created_at: string
+          id: string
+          name: string
+          selling_price: number
+          user_id: string
+          variable_cost: number
+        }
+        Insert: {
+          cost_price?: number
+          created_at?: string
+          id?: string
+          name: string
+          selling_price?: number
+          user_id: string
+          variable_cost?: number
+        }
+        Update: {
+          cost_price?: number
+          created_at?: string
+          id?: string
+          name?: string
+          selling_price?: number
+          user_id?: string
+          variable_cost?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          business_type: string | null
+          cnpj: string | null
+          company_name: string | null
+          created_at: string
+          id: string
+          name: string | null
+          phone: string | null
+          subscription_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_type?: string | null
+          cnpj?: string | null
+          company_name?: string | null
+          created_at?: string
+          id: string
+          name?: string | null
+          phone?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          business_type?: string | null
+          cnpj?: string | null
+          company_name?: string | null
+          created_at?: string
+          id?: string
+          name?: string | null
+          phone?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          created_at: string
+          date: string
+          description: string
+          id: string
+          type: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          description: string
+          id?: string
+          type: string
+          user_id: string
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          type?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
