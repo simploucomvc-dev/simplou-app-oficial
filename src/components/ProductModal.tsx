@@ -39,6 +39,7 @@ export default function ProductModal({ open, product, entryType = "product", tot
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [ignoreFixedCosts, setIgnoreFixedCosts] = useState(product?.ignore_fixed_costs ?? false);
+  const [localEntryType, setLocalEntryType] = useState<"product" | "service">(product?.entry_type || entryType);
   const [variableCosts, setVariableCosts] = useState<FixedCost[]>([]);
   const [selectedVariableCostIds, setSelectedVariableCostIds] = useState<string[]>([]);
 
@@ -51,6 +52,7 @@ export default function ProductModal({ open, product, entryType = "product", tot
     setSellingPrice(toMask(product?.selling_price));
     setSelectedIcon(product ? getProductIconName(product.id) : "Package");
     setIconPickerOpen(false);
+    setLocalEntryType(product?.entry_type || entryType);
     setIgnoreFixedCosts(product?.ignore_fixed_costs ?? false);
     setSelectedVariableCostIds([]);
 
@@ -114,7 +116,7 @@ export default function ProductModal({ open, product, entryType = "product", tot
       variable_cost: selectedVarTotal,
       selling_price: sp,
       ignore_fixed_costs: ignoreFixedCosts,
-      entry_type: product?.entry_type ?? entryType,
+      entry_type: localEntryType,
     };
 
     let productId: string | null = product?.id ?? null;
@@ -149,7 +151,7 @@ export default function ProductModal({ open, product, entryType = "product", tot
     }
 
     setSaving(false);
-    const isService = (product?.entry_type ?? entryType) === "service";
+    const isService = localEntryType === "service";
     toast.success(product ? (isService ? "Serviço atualizado!" : "Produto atualizado!") : (isService ? "Serviço criado!" : "Produto criado!"));
     onSaved();
     onClose();
@@ -164,16 +166,38 @@ export default function ProductModal({ open, product, entryType = "product", tot
           <DialogTitle className="text-xl flex items-center gap-2">
             <SelectedIconComponent size={20} className="text-brand-hover" />
             {product
-              ? (product.entry_type === "service" ? "Editar Serviço" : "Editar Produto")
-              : (entryType === "service" ? "Cadastrar Serviço" : "Cadastrar Produto")}
+              ? (localEntryType === "service" ? "Editar Serviço" : "Editar Produto")
+              : (localEntryType === "service" ? "Cadastrar Serviço" : "Cadastrar Produto")}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Tipo Selector */}
+        <div className="flex p-1 bg-muted rounded-lg gap-1 mb-2">
+          <button
+            onClick={() => setLocalEntryType("product")}
+            className={cn(
+              "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
+              localEntryType === "product" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Produto
+          </button>
+          <button
+            onClick={() => setLocalEntryType("service")}
+            className={cn(
+              "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
+              localEntryType === "service" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Serviço
+          </button>
+        </div>
 
         <div className="space-y-4 mt-2">
           {/* Nome */}
           <div>
             <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
-              {(product?.entry_type ?? entryType) === "service" ? "Nome do serviço" : "Nome do produto"}
+              {localEntryType === "service" ? "Nome do serviço" : "Nome do produto"}
             </Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Bolo de chocolate" className="h-11" />
           </div>
@@ -192,7 +216,9 @@ export default function ProductModal({ open, product, entryType = "product", tot
 
           {/* Ícone */}
           <div>
-            <Label className="text-muted-foreground text-sm font-medium mb-2 block">Ícone do produto</Label>
+            <Label className="text-muted-foreground text-sm font-medium mb-2 block">
+              {localEntryType === "service" ? "Ícone do serviço" : "Ícone do produto"}
+            </Label>
             <Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -228,20 +254,22 @@ export default function ProductModal({ open, product, entryType = "product", tot
           </div>
 
           {/* Preço de custo */}
-          <div>
-            <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de compra (custo)</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
-              <Input
-                type="text"
-                inputMode="numeric"
-                value={costPrice}
-                onChange={(e) => setCostPrice(maskBRL(e.target.value))}
-                placeholder="0,00"
-                className="h-11 pl-9"
-              />
+          {localEntryType === "product" && (
+            <div>
+              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de compra (custo)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={costPrice}
+                  onChange={(e) => setCostPrice(maskBRL(e.target.value))}
+                  placeholder="0,00"
+                  className="h-11 pl-9"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Custos variáveis vinculados */}
           <div className="border border-border rounded-lg p-3 space-y-2">
@@ -368,7 +396,7 @@ export default function ProductModal({ open, product, entryType = "product", tot
           <div className="flex gap-3 pt-2">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
             <Button className="flex-1 bg-brand-primary hover:bg-brand-hover text-white" onClick={handleSave} disabled={saving}>
-              {saving ? "Salvando..." : ((product?.entry_type ?? entryType) === "service" ? "Salvar Serviço" : "Salvar Produto")}
+              {saving ? "Salvando..." : (localEntryType === "service" ? "Salvar Serviço" : "Salvar Produto")}
             </Button>
           </div>
         </div>

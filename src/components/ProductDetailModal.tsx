@@ -40,39 +40,39 @@ export default function ProductDetailModal({ product, totalFixedCost, onClose, o
                         </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-card border border-border rounded-lg p-3">
-                            <p className="text-xs text-muted-foreground mb-1">Custo de compra</p>
-                            <p className="font-semibold">{formatCurrency(Number(product.cost_price))}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+                            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Custo de compra</p>
+                            <p className="text-lg font-semibold">{formatCurrency(Number(product.cost_price))}</p>
                         </div>
-                        <div className="bg-card border border-border rounded-lg p-3">
-                            <p className="text-xs text-muted-foreground mb-1">Custo variável</p>
-                            <p className="font-semibold">{formatCurrency(Number(product.variable_cost))}</p>
+                        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
+                            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Custo variável</p>
+                            <p className="text-lg font-semibold">{formatCurrency(Number(product.variable_cost))}</p>
                         </div>
-                        <div className="bg-card border border-border rounded-lg p-3 col-span-2 flex justify-between items-center">
+                        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm sm:col-span-2 flex justify-between items-center gap-4">
                             <div>
-                                <p className="text-xs text-muted-foreground mb-1">Custos fixos alocados</p>
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Custos fixos</p>
                                 <div className="flex items-center gap-1.5">
-                                    <p className="font-semibold">{formatCurrency(fc)}</p>
+                                    <p className="text-lg font-semibold">{formatCurrency(fc)}</p>
                                     {product.ignore_fixed_costs && (
-                                        <span className="text-[10px] bg-muted-foreground/10 text-muted-foreground px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
-                                            <AlertCircle size={10} /> Ignorado
+                                        <span className="text-[9px] bg-muted-foreground/10 text-muted-foreground px-1.5 py-0.5 rounded font-bold uppercase flex items-center gap-1">
+                                            Ignorado
                                         </span>
                                     )}
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-xs text-muted-foreground mb-1">Preço de venda</p>
-                                <p className="font-semibold text-brand-hover">{formatCurrency(Number(product.selling_price))}</p>
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Preço final</p>
+                                <p className="text-xl font-bold text-brand-hover">{formatCurrency(Number(product.selling_price))}</p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-muted border border-border rounded-lg p-3 flex justify-between items-center">
-                        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-                            <Sparkles size={16} /> Lucro líquido estimado
+                    <div className="bg-success/5 border border-success/20 rounded-2xl p-4 flex justify-between items-center mt-2">
+                        <div className="flex items-center gap-1.5 text-sm font-bold text-success/80">
+                            <Sparkles size={16} /> Lucro líquido
                         </div>
-                        <p className={`text-xl font-bold ${profit >= 0 ? "text-success" : "text-destructive"}`}>
+                        <p className={`text-2xl font-black ${profit >= 0 ? "text-success" : "text-destructive"}`}>
                             {formatCurrency(profit)}
                         </p>
                     </div>

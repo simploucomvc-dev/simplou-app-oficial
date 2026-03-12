@@ -104,30 +104,32 @@ export default function FixedCostsModal({ open, fixedCosts, onClose, onChanged }
             </div>
 
             {/* Add form */}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 placeholder="Nome do custo"
                 value={fixedName}
                 onChange={(e) => setFixedName(e.target.value)}
-                className="flex-1 h-10"
+                className="flex-1 h-11"
                 onKeyDown={(e) => { if (e.key === "Enter") addItem("fixed"); }}
               />
-              <div className="relative w-28">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">R$</span>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0,00"
-                  value={fixedValue}
-                  onChange={(e) => setFixedValue(e.target.value)}
-                  className="h-10 pl-8"
-                  onKeyDown={(e) => { if (e.key === "Enter") addItem("fixed"); }}
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1 sm:w-28">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none font-medium">R$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    value={fixedValue}
+                    onChange={(e) => setFixedValue(e.target.value)}
+                    className="h-11 pl-9"
+                    onKeyDown={(e) => { if (e.key === "Enter") addItem("fixed"); }}
+                  />
+                </div>
+                <Button size="icon" onClick={() => addItem("fixed")} className="shrink-0 h-11 w-11 bg-brand-primary text-white hover:bg-brand-hover">
+                  <Plus size={18} />
+                </Button>
               </div>
-              <Button size="icon" onClick={() => addItem("fixed")} className="shrink-0 h-10 w-10">
-                <Plus size={16} />
-              </Button>
             </div>
 
             {/* List */}
@@ -144,9 +146,8 @@ export default function FixedCostsModal({ open, fixedCosts, onClose, onChanged }
                     className="w-4 h-4 accent-primary rounded shrink-0"
                   />
                   <span
-                    className={`flex-1 text-sm font-medium truncate ${
-                      !cost.is_active ? "line-through text-muted-foreground" : ""
-                    }`}
+                    className={`flex-1 text-sm font-medium truncate ${!cost.is_active ? "line-through text-muted-foreground" : ""
+                      }`}
                   >
                     {cost.name}
                   </span>
@@ -191,30 +192,32 @@ export default function FixedCostsModal({ open, fixedCosts, onClose, onChanged }
             </div>
 
             {/* Add form */}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 placeholder="Nome do custo"
                 value={variableName}
                 onChange={(e) => setVariableName(e.target.value)}
-                className="flex-1 h-10"
+                className="flex-1 h-11"
                 onKeyDown={(e) => { if (e.key === "Enter") addItem("variable"); }}
               />
-              <div className="relative w-28">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">R$</span>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0,00"
-                  value={variableValue}
-                  onChange={(e) => setVariableValue(e.target.value)}
-                  className="h-10 pl-8"
-                  onKeyDown={(e) => { if (e.key === "Enter") addItem("variable"); }}
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1 sm:w-28">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none font-medium">R$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    value={variableValue}
+                    onChange={(e) => setVariableValue(e.target.value)}
+                    className="h-11 pl-9"
+                    onKeyDown={(e) => { if (e.key === "Enter") addItem("variable"); }}
+                  />
+                </div>
+                <Button size="icon" onClick={() => addItem("variable")} className="shrink-0 h-11 w-11 bg-brand-primary text-white hover:bg-brand-hover">
+                  <Plus size={18} />
+                </Button>
               </div>
-              <Button size="icon" onClick={() => addItem("variable")} className="shrink-0 h-10 w-10">
-                <Plus size={16} />
-              </Button>
             </div>
 
             {/* List */}
