@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Troca de e-mail – Simplou</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #f8f9fa;
+            font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;
+            color: #1a1a2e;
+            min-height: 100vh;
+        }
+
+        .wrapper {
+            max-width: 560px;
+            margin: 40px auto;
+            background: #ffffff;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+        }
+
+        .header {
+            padding: 40px 40px 20px;
+            text-align: center;
+        }
+
+        .logo {
+            height: 48px;
+            width: auto;
+        }
+
+        .body {
+            padding: 20px 40px 40px;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+
+        .text {
+            font-size: 16px;
+            color: #475569;
+            line-height: 1.6;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .change-box {
+            background: #f8fafc;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 30px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .change-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .change-label {
+            font-size: 12px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .change-value {
+            font-size: 14px;
+            color: #1e293b;
+            font-weight: 600;
+            text-align: right;
+            word-break: break-all;
+            margin-left: 10px;
+        }
+
+        .otp-wrapper {
+            background: #f7fee7;
+            border: 2px solid #A3E635;
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .otp-label {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: #5B9F00;
+            margin-bottom: 12px;
+        }
+
+        .otp-code {
+            font-size: 42px;
+            font-weight: 800;
+            letter-spacing: 8px;
+            color: #1a1a1a;
+            font-family: 'Courier New', monospace;
+        }
+
+        .footer {
+            background: #ffffff;
+            border-top: 1px solid #f1f5f9;
+            padding: 30px 40px;
+            text-align: center;
+        }
+
+        .footer p {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.6;
+        }
+
+        .footer a {
+            color: #A3E635;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .brand-footer {
+            font-size: 14px;
+            font-weight: 700;
+            color: #0f172a;
+            display: block;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+        <div class="header">
+            <img src="https://bjhrbvzpkjgstgpmbtuc.supabase.co/storage/v1/object/public/images-simplou/simplou-logo-mobile.png"
+                alt="Simplou" class="logo" />
+        </div>
+        <div class="body">
+            <h1 class="title">Troca de e-mail</h1>
+            <p class="text">Você solicitou a alteração do seu e-mail de acesso. Por favor, confirme os dados abaixo:</p>
+            <div class="change-box">
+                <div class="change-item"><span class="change-label">De</span><span class="change-value">{{ .Email
+                        }}</span></div>
+                <div class="change-item" style="border-top: 1px solid #f1f5f9; padding-top: 8px; margin-top: 8px;"><span
+                        class="change-label">Para</span><span class="change-value">{{ .NewEmail }}</span></div>
+            </div>
+            <div class="otp-wrapper">
+                <div class="otp-label">Código de confirmação</div>
+                <div class="otp-code">{{ .Token }}</div>
+            </div>
+        </div>
+        <div class="footer">
+            <span class="brand-footer">Simplou</span>
+            <p>Proteja sua conta. Se não foi você, contate o suporte.<br /><a
+                    href="https://app.simplou.com.br">app.simplou.com.br</a></p>
+        </div>
+    </div>
+</body>
+
+</html>
