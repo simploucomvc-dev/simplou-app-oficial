@@ -115,7 +115,7 @@ const tourSteps = [
   },
 ];
 
-export function createOnboardingTour() {
+export function createOnboardingTour(onComplete?: () => void) {
   return driver({
     showProgress: true,
     steps: tourSteps,
@@ -125,6 +125,7 @@ export function createOnboardingTour() {
     doneBtnText: "Finalizar ✓",
     onDestroyed: () => {
       localStorage.setItem(STORAGE_KEY, "true");
+      if (onComplete) onComplete();
     },
   });
 }
@@ -133,8 +134,8 @@ export function isFirstTimeUser(): boolean {
   return !localStorage.getItem(STORAGE_KEY);
 }
 
-export function startOnboarding() {
-  const tour = createOnboardingTour();
+export function startOnboarding(onComplete?: () => void) {
+  const tour = createOnboardingTour(onComplete);
   tour.drive();
 }
 

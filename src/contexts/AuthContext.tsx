@@ -15,6 +15,7 @@ export interface UserProfile {
   profile_photo_url?: string;
   company_logo_url?: string;
   role: UserRole;
+  onboarding_completed?: boolean;
   created_at: string;
 }
 

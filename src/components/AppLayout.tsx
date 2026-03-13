@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard,
@@ -68,16 +69,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, loading, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
 
-  // Inicia o tour automaticamente no primeiro acesso
+  // Inicia o tour automaticamente no primeiro acesso (validado no backend)
   useEffect(() => {
-    if (isFirstTimeUser()) {
-      const timer = setTimeout(() => startOnboarding(), 1000);
+    if (loading || !profile || !user) return;
+
+    // Só dispara automaticamente se onboarding_completed for false no banco
+    if (!profile.onboarding_completed && isFirstTimeUser()) {
+      const timer = setTimeout(() => {
+        startOnboarding(async () => {
+          // Ao finalizar ou fechar, marcamos no banco para não repetir AUTOMATICAMENTE
+          const { error } = await supabase
+            .from("profiles")
+            .update({ onboarding_completed: true })
+            .eq("id", user.id);
+
+          if (!error) refreshProfile();
+        });
+      }, 1000);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [profile, loading, user]);
 
   const toggleExpanded = () => {
     setExpanded((prev) => {
