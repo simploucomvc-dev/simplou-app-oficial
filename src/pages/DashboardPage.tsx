@@ -56,9 +56,9 @@ export default function DashboardPage() {
   });
 
   const cards = [
-    { id: "card-receita", label: "Receita total", value: totalIncome, icon: TrendingUp, color: "text-success", note: futureIncome > 0 ? `Entradas previstas: ${formatCurrency(futureIncome)}` : null },
-    { id: "card-despesa", label: "Despesa total", value: totalExpense, icon: TrendingDown, color: "text-destructive", note: null },
-    { id: "card-lucro", label: "Lucro líquido", value: profit, icon: Sparkles, color: profit >= 0 ? "text-success" : "text-destructive", note: null },
+    { id: "card-receita", label: "Receita total", value: totalIncome, icon: TrendingUp, color: "text-[#88E20F]", bg: "bg-[#88E20F]/10", note: futureIncome > 0 ? `Entradas previstas: ${formatCurrency(futureIncome)}` : null },
+    { id: "card-despesa", label: "Despesa total", value: totalExpense, icon: TrendingDown, color: "text-destructive", bg: "bg-destructive/10", note: null },
+    { id: "card-lucro", label: "Lucro líquido", value: profit, icon: Sparkles, color: profit >= 0 ? "text-success" : "text-destructive", bg: profit >= 0 ? "bg-success/10" : "bg-destructive/10", note: null },
   ];
 
   if (loading) {
@@ -127,7 +127,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {cards.map((card) => (
           <div key={card.label} id={card.id} className="bg-card border-2 border-border rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${card.color === "text-success" ? "bg-success/10" : card.color === "text-destructive" ? "bg-destructive/10" : "bg-primary/10"}`}>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${card.bg}`}>
               <card.icon size={20} className={card.color} />
             </div>
             <p className="text-sm text-muted-foreground font-medium mb-1">{card.label}</p>

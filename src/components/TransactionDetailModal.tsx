@@ -35,6 +35,7 @@ export default function TransactionDetailModal({ transaction, availableProducts,
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [recurringDeleteOpen, setRecurringDeleteOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   if (!transaction) return null;
@@ -56,13 +57,46 @@ export default function TransactionDetailModal({ transaction, availableProducts,
     }
   };
 
+  const baseDesc = transaction.description.replace(/\s*\(Parcela \d+\/\d+\)$/, "");
+  const isRecurring = baseDesc !== transaction.description;
+
   const handleDelete = async () => {
     const { error } = await supabase.from("transactions").delete().eq("id", transaction.id);
     if (error) toast.error("Erro ao excluir");
     else { toast.success("Operação excluída"); onChanged(); onClose(); setDeleteDialogOpen(false); }
   };
 
-  const confirmDelete = () => {
+  const handleDeleteWithFuture = async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return;
+    const { data: toDelete } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("user_id", userData.user.id)
+      .ilike("description", `${baseDesc}%`)
+      .gte("date", transaction.date);
+    if (!toDelete || toDelete.length === 0) return;
+    const { error } = await supabase.from("transactions").delete().in("id", toDelete.map((t) => t.id));
+    if (error) toast.error("Erro ao excluir");
+    else { toast.success(`${toDelete.length} operação(ões) excluída(s)`); onChanged(); onClose(); setRecurringDeleteOpen(false); }
+  };
+
+  const confirmDelete = async () => {
+    if (isRecurring) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData.user) {
+        const { data: futureItems } = await supabase
+          .from("transactions")
+          .select("id")
+          .eq("user_id", userData.user.id)
+          .ilike("description", `${baseDesc}%`)
+          .gt("date", transaction.date);
+        if (futureItems && futureItems.length > 0) {
+          setRecurringDeleteOpen(true);
+          return;
+        }
+      }
+    }
     setDeleteDialogOpen(true);
   };
 
@@ -272,6 +306,33 @@ export default function TransactionDetailModal({ transaction, availableProducts,
               title="Aviso: Exclusão Permanente"
               itemName={transaction.description}
             />
+
+            <Dialog open={recurringDeleteOpen} onOpenChange={setRecurringDeleteOpen}>
+              <DialogContent className="max-w-xs">
+                <DialogHeader>
+                  <DialogTitle className="text-destructive">Excluir operação recorrente</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">Esta operação faz parte de uma série recorrente. O que deseja fazer?</p>
+                <div className="flex flex-col gap-2 mt-2">
+                  <Button
+                    variant="outline"
+                    className="w-full border-destructive/40 text-destructive hover:bg-destructive/10"
+                    onClick={handleDelete}
+                  >
+                    Apagar somente essa
+                  </Button>
+                  <Button
+                    className="w-full bg-destructive hover:bg-destructive/90 text-white"
+                    onClick={handleDeleteWithFuture}
+                  >
+                    Apagar faturas futuras também
+                  </Button>
+                  <Button variant="outline" className="w-full" onClick={() => setRecurringDeleteOpen(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </>
         ) : (
           <div className="space-y-4 mt-1">

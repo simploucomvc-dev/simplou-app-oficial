@@ -60,7 +60,7 @@ export default {
           foreground: "hsl(var(--card-foreground))",
         },
         brand: {
-          primary: "#7DC400",
+          primary: "#56CC06",
           hover: "#5E9600",
           light: "#E6F7C0",
         },
