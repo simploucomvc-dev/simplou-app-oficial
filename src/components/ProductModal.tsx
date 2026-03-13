@@ -174,7 +174,7 @@ export default function ProductModal({ open, product, entryType = "product", fix
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-hidden flex flex-col p-0">
+      <DialogContent className="max-w-lg w-[95vw] max-h-[75dvh] sm:max-h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl">
         {/* Header fixo */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="text-xl flex items-center gap-2">

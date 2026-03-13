@@ -406,115 +406,114 @@ export default function TransactionsPage() {
 
       {/* Nova Operação Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto rounded-2xl">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-md w-[95vw] max-h-[75dvh] sm:max-h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl">
+          <DialogHeader className="px-6 pt-6 pb-2 border-b shrink-0">
             <DialogTitle className="text-lg font-bold">Nova Operação</DialogTitle>
           </DialogHeader>
 
-          <div className="flex gap-2 mt-1">
-            <button
-              type="button"
-              onClick={() => setType("income")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm border-2 transition-all ${type === "income" ? "bg-success text-white border-success" : "bg-card text-muted-foreground border-border hover:border-success/50"
-                }`}
-            >
-              <ArrowDownCircle size={15} /> Entrada
-            </button>
-            <button
-              type="button"
-              onClick={() => setType("expense")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm border-2 transition-all ${type === "expense" ? "bg-destructive text-white border-destructive" : "bg-card text-muted-foreground border-border hover:border-destructive/50"
-                }`}
-            >
-              <ArrowUpCircle size={15} /> Saída
-            </button>
-          </div>
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setType("income")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm border-2 transition-all ${type === "income" ? "bg-success text-white border-success" : "bg-card text-muted-foreground border-border hover:border-success/50"
+                  }`}
+              >
+                <ArrowDownCircle size={15} /> Entrada
+              </button>
+              <button
+                type="button"
+                onClick={() => setType("expense")}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm border-2 transition-all ${type === "expense" ? "bg-destructive text-white border-destructive" : "bg-card text-muted-foreground border-border hover:border-destructive/50"
+                  }`}
+              >
+                <ArrowUpCircle size={15} /> Saída
+              </button>
+            </div>
 
-          {type === "income" && availableProducts.length > 0 && (
-            <div>
-              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
-                Produto vinculado <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    className="w-full justify-between h-11 font-normal bg-background"
-                  >
-                    {linkedProductId
-                      ? availableProducts.find((p) => p.id === linkedProductId)?.name
-                      : "Nenhum produto selecionado"}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start" style={{ width: 'var(--radix-popover-trigger-width)' }}>
-                  <Command>
-                    <CommandInput placeholder="Buscar produto..." className="h-9" />
-                    <CommandList>
-                      <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value="none"
-                          onSelect={() => {
-                            handleProductLink("");
-                          }}
-                        >
-                          Nenhum produto
-                          <Check
-                            className={cn(
-                              "ml-auto h-4 w-4",
-                              !linkedProductId ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                        </CommandItem>
-                        {availableProducts.map((p) => (
+            {type === "income" && availableProducts.length > 0 && (
+              <div>
+                <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
+                  Produto vinculado <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between h-11 font-normal bg-background"
+                    >
+                      {linkedProductId
+                        ? availableProducts.find((p) => p.id === linkedProductId)?.name
+                        : "Nenhum produto selecionado"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                    <Command>
+                      <CommandInput placeholder="Buscar produto..." className="h-9" />
+                      <CommandList>
+                        <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+                        <CommandGroup>
                           <CommandItem
-                            key={p.id}
-                            value={p.name}
-                            onSelect={() => handleProductLink(p.id)}
+                            value="none"
+                            onSelect={() => {
+                              handleProductLink("");
+                            }}
                           >
-                            {p.name}
+                            Nenhum produto
                             <Check
                               className={cn(
                                 "ml-auto h-4 w-4",
-                                linkedProductId === p.id ? "opacity-100" : "opacity-0"
+                                !linkedProductId ? "opacity-100" : "opacity-0"
                               )}
                             />
                           </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              {linkedProductId && (
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  Preço do produto preenchido automaticamente (editável)
-                </p>
-              )}
-            </div>
-          )}
+                          {availableProducts.map((p) => (
+                            <CommandItem
+                              key={p.id}
+                              value={p.name}
+                              onSelect={() => handleProductLink(p.id)}
+                            >
+                              {p.name}
+                              <Check
+                                className={cn(
+                                  "ml-auto h-4 w-4",
+                                  linkedProductId === p.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {linkedProductId && (
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                    Preço do produto preenchido automaticamente (editável)
+                  </p>
+                )}
+              </div>
+            )}
 
-          <form onSubmit={handleSave} className="space-y-4">
-            <div>
-              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Descrição</Label>
-              <ExpandableInput
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Ex: Venda do produto X"
-                modalTitle="Descrição da Operação"
-                rows={2}
-                autoFocus
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <Label className="text-muted-foreground text-sm font-medium">Valor</Label>
-                  <div className="flex items-center gap-1.5">
-                    {isUSD && <span className="text-xs text-muted-foreground">US$ 1 = R$ {usdRate.toFixed(2)}</span>}
-                    <div className="flex h-7 rounded-lg border-2 border-border overflow-hidden">
+                <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Descrição</Label>
+                <ExpandableInput
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Ex: Venda do produto X"
+                  modalTitle="Descrição da Operação"
+                  rows={2}
+                  autoFocus
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between h-7 mb-1.5">
+                    <Label className="text-muted-foreground text-sm font-medium">Valor</Label>
+                    <div className="flex h-7 rounded-lg border-2 border-border overflow-hidden shrink-0">
                       <button
                         type="button"
                         onClick={() => !isUSD || toggleCurrency()}
@@ -533,124 +532,130 @@ export default function TransactionsPage() {
                         {rateLoading ? <RefreshCw size={10} className="animate-spin" /> : "US$"}
                       </button>
                     </div>
-                    {isUSD && (
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">
+                      {isUSD ? "US$" : "R$"}
+                    </span>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={value}
+                      onChange={(e) => setValue(maskBRL(e.target.value))}
+                      placeholder="0,00"
+                      className="h-11 pl-10"
+                    />
+                  </div>
+                  {isUSD && (
+                    <div className="flex items-center justify-between mt-1 px-0.5">
+                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <span>US$ 1 = R$ {usdRate.toFixed(2)}</span>
+                        <button
+                          type="button"
+                          onClick={loadRate}
+                          disabled={rateLoading}
+                          className="hover:text-brand-primary transition-colors h-3 w-3 flex items-center justify-center"
+                        >
+                          <RefreshCw size={9} className={rateLoading ? "animate-spin" : ""} />
+                        </button>
+                      </div>
+                      {parseBRL(value) > 0 && (
+                        <span className="text-[11px] font-semibold text-brand-hover">
+                          ≈ R$ {maskBRL(String(Math.round(parseBRL(value) * usdRate * 100)))}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center h-7 mb-1.5">
+                    <Label className="text-muted-foreground text-sm font-medium">Data</Label>
+                  </div>
+                  <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+                    <PopoverTrigger asChild>
                       <button
                         type="button"
-                        onClick={loadRate}
-                        disabled={rateLoading}
-                        className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
-                        title="Atualizar cotação"
+                        className="w-full h-11 flex items-center justify-between text-sm bg-background border border-input rounded-md px-3 outline-none transition-all hover:border-brand-primary focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
                       >
-                        <RefreshCw size={11} className={rateLoading ? "animate-spin" : ""} />
+                        <span className="text-foreground">
+                          {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
+                        </span>
+                        <Calendar className="w-4 h-4 text-muted-foreground" />
                       </button>
-                    )}
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <ClickUpDatePicker
+                        hideSidebar
+                        hideStartDate
+                        dueDate={selectedDate}
+                        onDueDateChange={(date) => {
+                          if (date) { setSelectedDate(date); setDatePickerOpen(false); }
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+
+              <div className="border border-border rounded-lg p-4 space-y-4 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">É uma operação recorrente?</Label>
+                    <p className="text-xs text-muted-foreground">Repetir automaticamente nos próximos meses</p>
                   </div>
+                  <Switch checked={isRecurrent} onCheckedChange={setIsRecurrent} />
                 </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">
-                    {isUSD ? "US$" : "R$"}
-                  </span>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    value={value}
-                    onChange={(e) => setValue(maskBRL(e.target.value))}
-                    placeholder="0,00"
-                    className="h-11 pl-10"
-                  />
-                </div>
-                {isUSD && parseBRL(value) > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    ≈ R$ {maskBRL(String(Math.round(parseBRL(value) * usdRate * 100)))}
-                  </p>
+
+                {isRecurrent && (
+                  <div className="pt-2 border-t border-border">
+                    <Label className="text-sm mb-1.5 block">Repetir por quantos meses?</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min="2"
+                        max="120"
+                        value={recurrentMonths}
+                        onChange={(e) => setRecurrentMonths(e.target.value)}
+                        className="w-24 h-10"
+                      />
+                      <span className="text-sm text-muted-foreground">meses</span>
+                    </div>
+                    <p className="text-xs text-amber-500 mt-2">Isto criará faturas futuras preenchidas no seu painel.</p>
+                  </div>
                 )}
               </div>
-              <div>
-                <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Data</Label>
-                <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="w-full h-11 flex items-center justify-between text-sm bg-background border border-input rounded-md px-3 outline-none transition-all hover:border-brand-primary focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
-                    >
-                      <span className="text-foreground">
-                        {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}
-                      </span>
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <ClickUpDatePicker
-                      hideSidebar
-                      hideStartDate
-                      dueDate={selectedDate}
-                      onDueDateChange={(date) => {
-                        if (date) { setSelectedDate(date); setDatePickerOpen(false); }
-                      }}
-                    />
-                  </PopoverContent>
-                </Popover>
+
+              <div className="bg-muted/30 border border-border rounded-lg p-3">
+                <Label className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
+                  Anexar Comprovante (Opcional)
+                </Label>
+                <Input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 2 * 1024 * 1024) {
+                      toast.error("O arquivo deve ter no máximo 2MB.");
+                      e.target.value = "";
+                      return;
+                    }
+                    setAttachmentFile(file);
+                  }}
+                  className="text-xs h-9 cursor-pointer file:cursor-pointer"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">Max 2MB. Formatos: JPG, PNG, PDF.</p>
               </div>
-            </div>
-
-            <div className="border border-border rounded-lg p-4 space-y-4 bg-muted/20">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label className="text-sm font-medium">É uma operação recorrente?</Label>
-                  <p className="text-xs text-muted-foreground">Repetir automaticamente nos próximos meses</p>
-                </div>
-                <Switch checked={isRecurrent} onCheckedChange={setIsRecurrent} />
-              </div>
-
-              {isRecurrent && (
-                <div className="pt-2 border-t border-border">
-                  <Label className="text-sm mb-1.5 block">Repetir por quantos meses?</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      min="2"
-                      max="120"
-                      value={recurrentMonths}
-                      onChange={(e) => setRecurrentMonths(e.target.value)}
-                      className="w-24 h-10"
-                    />
-                    <span className="text-sm text-muted-foreground">meses</span>
-                  </div>
-                  <p className="text-xs text-amber-500 mt-2">Isto criará faturas futuras preenchidas no seu painel.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-muted/30 border border-border rounded-lg p-3">
-              <Label className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
-                Anexar Comprovante (Opcional)
-              </Label>
-              <Input
-                type="file"
-                accept=".jpg,.jpeg,.png,.pdf"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  if (file.size > 2 * 1024 * 1024) {
-                    toast.error("O arquivo deve ter no máximo 2MB.");
-                    e.target.value = "";
-                    return;
-                  }
-                  setAttachmentFile(file);
-                }}
-                className="text-xs h-9 cursor-pointer file:cursor-pointer"
-              />
-              <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">Max 2MB. Formatos: JPG, PNG, PDF.</p>
-            </div>
-            <Button
-              type="submit"
-              size="full"
-              disabled={saving}
-              className={type === "income" ? "bg-success hover:bg-success/90 text-white" : "bg-destructive hover:bg-destructive/90 text-white"}
-            >
-              {saving ? "Salvando..." : `Salvar ${type === "income" ? "Entrada" : "Saída"}`}
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                size="full"
+                disabled={saving}
+                className={type === "income" ? "bg-success hover:bg-success/90 text-white" : "bg-destructive hover:bg-destructive/90 text-white"}
+              >
+                {saving ? "Salvando..." : `Salvar ${type === "income" ? "Entrada" : "Saída"}`}
+              </Button>
+            </form>
+          </div>
         </DialogContent>
       </Dialog>
 
