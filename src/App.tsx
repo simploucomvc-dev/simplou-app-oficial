@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import TrialExpiredScreen from "@/components/TrialExpiredScreen";
 import LoginPage from "@/pages/LoginPage";
+import RegisterPage from "@/pages/RegisterPage";
 import DashboardPage from "@/pages/DashboardPage";
 import ProductsPage from "@/pages/ProductsPage";
 import TransactionsPage from "@/pages/TransactionsPage";
@@ -47,6 +48,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+            <Route path="/registro" element={<PublicRoute><RegisterPage /></PublicRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="/produtos" element={<ProtectedRoute><ProductsPage /></ProtectedRoute>} />
             <Route path="/operacoes" element={<Navigate to="/financeiro" replace />} />
