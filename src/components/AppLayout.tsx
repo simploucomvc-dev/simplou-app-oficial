@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { QuickActionButton } from "./QuickActionButton";
 import { OnboardingButton } from "./OnboardingButton";
-import { isFirstTimeUser, startOnboarding } from "@/lib/onboarding";
+import { startOnboarding } from "@/lib/onboarding";
 import "@/styles/onboarding.css";
 
 const mainNavItems = [
@@ -77,7 +77,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (loading || !profile || !user) return;
 
     // Só dispara automaticamente se onboarding_completed for false no banco
-    if (!profile.onboarding_completed && isFirstTimeUser()) {
+    if (profile.onboarding_completed === false) {
       const timer = setTimeout(() => {
         startOnboarding(async () => {
           // Ao finalizar ou fechar, marcamos no banco para não repetir AUTOMATICAMENTE
