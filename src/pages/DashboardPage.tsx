@@ -41,7 +41,10 @@ export default function DashboardPage() {
     fetchData();
   }, [user]);
 
-  const totalIncome = transactions.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.value), 0);
+  const todayStr = new Date().toISOString().split("T")[0];
+  const receivedIncome = transactions.filter((t) => t.type === "income" && t.date <= todayStr).reduce((s, t) => s + Number(t.value), 0);
+  const futureIncome = transactions.filter((t) => t.type === "income" && t.date > todayStr).reduce((s, t) => s + Number(t.value), 0);
+  const totalIncome = receivedIncome;
   const totalExpense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.value), 0);
   const profit = totalIncome - totalExpense;
 
@@ -53,9 +56,9 @@ export default function DashboardPage() {
   });
 
   const cards = [
-    { label: "Receita total", value: totalIncome, icon: TrendingUp, color: "text-success" },
-    { label: "Despesa total", value: totalExpense, icon: TrendingDown, color: "text-destructive" },
-    { label: "Lucro líquido", value: profit, icon: Sparkles, color: profit >= 0 ? "text-success" : "text-destructive" },
+    { id: "card-receita", label: "Receita total", value: totalIncome, icon: TrendingUp, color: "text-success", note: futureIncome > 0 ? `Entradas previstas: ${formatCurrency(futureIncome)}` : null },
+    { id: "card-despesa", label: "Despesa total", value: totalExpense, icon: TrendingDown, color: "text-destructive", note: null },
+    { id: "card-lucro", label: "Lucro líquido", value: profit, icon: Sparkles, color: profit >= 0 ? "text-success" : "text-destructive", note: null },
   ];
 
   if (loading) {
@@ -98,7 +101,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div id="dashboard-header" className="flex items-center gap-4">
         {companyLogo ? (
           <img src={companyLogo} alt="Logo da Empresa" className="w-16 h-16 rounded-2xl object-cover border-4 border-background shadow-md shadow-black/5" />
         ) : profilePhoto ? (
@@ -123,18 +126,19 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {cards.map((card) => (
-          <div key={card.label} className="bg-card border-2 border-border rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
+          <div key={card.label} id={card.id} className="bg-card border-2 border-border rounded-2xl p-6 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${card.color === "text-success" ? "bg-success/10" : card.color === "text-destructive" ? "bg-destructive/10" : "bg-primary/10"}`}>
               <card.icon size={20} className={card.color} />
             </div>
             <p className="text-sm text-muted-foreground font-medium mb-1">{card.label}</p>
             <p className={`text-3xl font-bold ${card.color}`}>{formatCurrency(card.value)}</p>
+            {card.note && <p className="text-xs text-muted-foreground mt-2">{card.note}</p>}
           </div>
         ))}
       </div>
 
       {/* Line chart */}
-      <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+      <div id="grafico-evolucao" className="bg-card border border-border rounded-2xl p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-muted-foreground mb-4">Evolução Mensal</h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -170,7 +174,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Bar chart */}
-      <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+      <div id="grafico-composicao" className="bg-card border border-border rounded-2xl p-5 shadow-sm">
         <h2 className="text-sm font-semibold text-muted-foreground mb-4">Receitas vs Despesas</h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">

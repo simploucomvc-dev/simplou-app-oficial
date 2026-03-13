@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Lightbulb, Sparkles, Check } from "lucide-react";
-import { PRODUCT_ICONS, ICON_MAP, setProductIcon, getProductIconName, maskBRL, parseBRL } from "@/lib/product-icons";
+import { PRODUCT_ICONS, ICON_MAP, setProductIcon, getProductIconName, maskBRL, parseBRL, calcFixedCostForProduct, calcVariableCostForProduct } from "@/lib/product-icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ExpandableInput } from "@/components/ui/expandable-input";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,8 @@ interface Props {
   open: boolean;
   product?: Product;
   entryType?: "product" | "service";
-  totalFixedCost: number;
+  fixedCosts: FixedCost[];
+  usdRate?: number;
   onClose: () => void;
   onSaved: () => void;
   onOpenCosts?: () => void;
@@ -29,7 +30,7 @@ function toMask(value: number | undefined): string {
   return maskBRL(String(Math.round(value * 100)));
 }
 
-export default function ProductModal({ open, product, entryType = "product", totalFixedCost, onClose, onSaved, onOpenCosts }: Props) {
+export default function ProductModal({ open, product, entryType = "product", fixedCosts, usdRate = 1, onClose, onSaved, onOpenCosts }: Props) {
   const { user } = useAuth();
   const [name, setName] = useState(product?.name || "");
   const [description, setDescription] = useState(product?.description || "");
@@ -83,12 +84,24 @@ export default function ProductModal({ open, product, entryType = "product", tot
   const cp = parseBRL(costPrice);
   const sp = parseBRL(sellingPrice);
 
-  const effectiveFixedCost = ignoreFixedCosts ? 0 : totalFixedCost;
-  const selectedVarTotal = variableCosts
-    .filter((c) => selectedVariableCostIds.includes(c.id))
+  // Custos fixos: BRL (para preço sugerido, sem circularidade) + % sobre sp atual
+  const fixedCostBRL = ignoreFixedCosts ? 0 : fixedCosts
+    .filter(c => c.is_active && (!c.type || c.type === "fixed") && c.value_type !== "percentage")
+    .reduce((s, c) => s + (c.value_type === "usd" ? Number(c.value) * usdRate : Number(c.value)), 0);
+  const effectiveFixedCost = ignoreFixedCosts ? 0 : calcFixedCostForProduct(fixedCosts, sp, cp, usdRate);
+  const fixedCostPctTotal = ignoreFixedCosts ? 0 : fixedCosts
+    .filter(c => c.is_active && (!c.type || c.type === "fixed") && c.value_type === "percentage")
     .reduce((s, c) => s + Number(c.value), 0);
 
-  const suggestedPrice = (cp + effectiveFixedCost + selectedVarTotal) * 2;
+  // Custos variáveis selecionados (R$ + % sobre sp)
+  const selectedVarCosts = variableCosts.filter((c) => selectedVariableCostIds.includes(c.id));
+  const selectedVarTotal = calcVariableCostForProduct(selectedVarCosts, sp, cp, usdRate);
+  const selectedVarTotalBRL = selectedVarCosts
+    .filter(c => c.value_type !== "percentage")
+    .reduce((s, c) => s + (c.value_type === "usd" ? Number(c.value) * usdRate : Number(c.value)), 0);
+
+  // Sugerido usa apenas R$ fixos (sem % para evitar circularidade)
+  const suggestedPrice = (cp + fixedCostBRL + selectedVarTotalBRL) * 2;
   const profit = sp - selectedVarTotal - effectiveFixedCost - cp;
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -161,8 +174,9 @@ export default function ProductModal({ open, product, entryType = "product", tot
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-lg w-[95vw] max-h-[90vh] overflow-hidden flex flex-col p-0">
+        {/* Header fixo */}
+        <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="text-xl flex items-center gap-2">
             <SelectedIconComponent size={20} className="text-brand-hover" />
             {product
@@ -171,233 +185,250 @@ export default function ProductModal({ open, product, entryType = "product", tot
           </DialogTitle>
         </DialogHeader>
 
-        {/* Tipo Selector */}
-        <div className="flex p-1 bg-muted rounded-lg gap-1 mb-2">
-          <button
-            onClick={() => setLocalEntryType("product")}
-            className={cn(
-              "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
-              localEntryType === "product" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Produto
-          </button>
-          <button
-            onClick={() => setLocalEntryType("service")}
-            className={cn(
-              "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
-              localEntryType === "service" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Serviço
-          </button>
-        </div>
-
-        <div className="space-y-4 mt-2">
-          {/* Nome */}
-          <div>
-            <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
-              {localEntryType === "service" ? "Nome do serviço" : "Nome do produto"}
-            </Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Bolo de chocolate" className="h-11" />
+        {/* Área com scroll interno */}
+        <div className="overflow-y-auto flex-1 px-6 py-4">
+          {/* Tipo Selector */}
+          <div className="flex p-1 bg-muted rounded-lg gap-1 mb-2">
+            <button
+              onClick={() => setLocalEntryType("product")}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
+                localEntryType === "product" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Produto
+            </button>
+            <button
+              onClick={() => setLocalEntryType("service")}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
+                localEntryType === "service" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Serviço
+            </button>
           </div>
 
-          {/* Descrição */}
-          <div>
-            <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Descrição (opcional)</Label>
-            <ExpandableInput
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Descreva o produto..."
-              modalTitle="Descrição do Produto"
-              className="shadow-sm border-input"
-            />
-          </div>
-
-          {/* Ícone */}
-          <div>
-            <Label className="text-muted-foreground text-sm font-medium mb-2 block">
-              {localEntryType === "service" ? "Ícone do serviço" : "Ícone do produto"}
-            </Label>
-            <Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="w-12 h-12 rounded-xl bg-brand-light border-2 border-brand-primary/40 hover:border-brand-primary flex items-center justify-center transition-all"
-                  title="Clique para trocar o ícone"
-                >
-                  <SelectedIconComponent size={22} className="text-brand-hover" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-3" align="start" sideOffset={8}>
-                <p className="text-xs font-semibold text-muted-foreground mb-2">Escolha um ícone</p>
-                <div className="grid grid-cols-5 gap-1">
-                  {PRODUCT_ICONS.map(({ name: iconName, icon: Icon, label }) => (
-                    <button
-                      key={iconName}
-                      type="button"
-                      title={label}
-                      onClick={() => { setSelectedIcon(iconName); setIconPickerOpen(false); }}
-                      className={cn(
-                        "w-9 h-9 rounded-lg flex items-center justify-center transition-all",
-                        selectedIcon === iconName
-                          ? "bg-brand-primary text-white shadow-sm"
-                          : "text-muted-foreground hover:bg-brand-light hover:text-brand-hover"
-                      )}
-                    >
-                      <Icon size={16} />
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          {/* Preço de custo */}
-          {localEntryType === "product" && (
+          <div className="space-y-4 mt-2">
+            {/* Nome */}
             <div>
-              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de compra (custo)</Label>
+              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
+                {localEntryType === "service" ? "Nome do serviço" : "Nome do produto"}
+              </Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Bolo de chocolate" className="h-11" />
+            </div>
+
+            {/* Descrição */}
+            <div>
+              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Descrição (opcional)</Label>
+              <ExpandableInput
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Descreva o produto..."
+                modalTitle="Descrição do Produto"
+                className="shadow-sm border-input"
+              />
+            </div>
+
+            {/* Ícone */}
+            <div>
+              <Label className="text-muted-foreground text-sm font-medium mb-2 block">
+                {localEntryType === "service" ? "Ícone do serviço" : "Ícone do produto"}
+              </Label>
+              <Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-12 h-12 rounded-xl bg-brand-light border-2 border-brand-primary/40 hover:border-brand-primary flex items-center justify-center transition-all"
+                    title="Clique para trocar o ícone"
+                  >
+                    <SelectedIconComponent size={22} className="text-brand-hover" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-3" align="start" sideOffset={8}>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">Escolha um ícone</p>
+                  <div className="grid grid-cols-5 gap-1">
+                    {PRODUCT_ICONS.map(({ name: iconName, icon: Icon, label }) => (
+                      <button
+                        key={iconName}
+                        type="button"
+                        title={label}
+                        onClick={() => { setSelectedIcon(iconName); setIconPickerOpen(false); }}
+                        className={cn(
+                          "w-9 h-9 rounded-lg flex items-center justify-center transition-all",
+                          selectedIcon === iconName
+                            ? "bg-brand-primary text-white shadow-sm"
+                            : "text-muted-foreground hover:bg-brand-light hover:text-brand-hover"
+                        )}
+                      >
+                        <Icon size={16} />
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Preço de custo */}
+            {localEntryType === "product" && (
+              <div>
+                <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de compra (custo)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={costPrice}
+                    onChange={(e) => setCostPrice(maskBRL(e.target.value))}
+                    placeholder="0,00"
+                    className="h-11 pl-9"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Custos variáveis vinculados */}
+            <div className="border border-border rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-muted-foreground">Custos Variáveis</p>
+                {onOpenCosts && (
+                  <Button type="button" variant="ghost" size="sm" onClick={onOpenCosts} className="h-6 text-xs text-brand-hover hover:text-brand-primary px-2">
+                    + Criar
+                  </Button>
+                )}
+              </div>
+
+              {variableCosts.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic px-1">Nenhum custo cadastrado.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {variableCosts.map((vc) => {
+                    const checked = selectedVariableCostIds.includes(vc.id);
+                    return (
+                      <button
+                        key={vc.id}
+                        type="button"
+                        onClick={() => toggleVariableCost(vc.id)}
+                        className="w-full flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-brand-light transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={cn(
+                              "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                              checked
+                                ? "bg-brand-primary border-brand-primary"
+                                : "border-muted-foreground/40 bg-background"
+                            )}
+                          >
+                            {checked && <Check size={10} className="text-white" strokeWidth={3} />}
+                          </div>
+                          <span className="text-sm">{vc.name}</span>
+                        </div>
+                        <span className="text-sm text-muted-foreground shrink-0">
+                          {vc.value_type === "percentage" ? (
+                            <span className="inline-flex items-center text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded-md">
+                              {Number(vc.value)}%
+                            </span>
+                          ) : (
+                            formatCurrency(vc.value_type === "usd" ? Number(vc.value) * usdRate : Number(vc.value))
+                          )}
+                        </span>                    </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {selectedVariableCostIds.length > 0 && (
+                <div className="flex items-center justify-between pt-1 border-t border-border">
+                  <span className="text-xs text-muted-foreground">Subtotal selecionado</span>
+                  <span className="text-xs font-semibold text-brand-hover">{formatCurrency(selectedVarTotal)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Custo fixo (automático) */}
+            <div className="bg-muted border border-border rounded-lg p-3">
+              <p className="text-xs text-muted-foreground mb-1">Custo fixo total (automático)</p>
+              <div className={cn("flex items-center gap-2 flex-wrap", ignoreFixedCosts && "opacity-40 line-through")}>
+                {(fixedCostBRL > 0 || fixedCostPctTotal === 0) && (
+                  <span className="text-lg font-bold">{formatCurrency(fixedCostBRL)}</span>
+                )}
+                {fixedCostPctTotal > 0 && (
+                  <span className="inline-flex items-center text-sm font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded-md">
+                    + {fixedCostPctTotal}% <span className="ml-1 font-normal text-xs">{sp > 0 ? `= ${formatCurrency(effectiveFixedCost - fixedCostBRL)}` : "do preço"}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Ignorar custos fixos */}
+            <button
+              type="button"
+              onClick={() => setIgnoreFixedCosts((v) => !v)}
+              className="flex items-center gap-2.5 w-full text-left"
+            >
+              <div
+                className={cn(
+                  "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
+                  ignoreFixedCosts
+                    ? "bg-brand-primary border-brand-primary"
+                    : "border-muted-foreground/40 bg-background"
+                )}
+              >
+                {ignoreFixedCosts && <Check size={10} className="text-white" strokeWidth={3} />}
+              </div>
+              <span className="text-sm text-muted-foreground">Ignorar custos fixos neste produto</span>
+            </button>
+
+            <div className="border-t border-border" />
+
+            {/* Preço sugerido */}
+            <div className="bg-success/10 border border-success/30 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <Lightbulb size={12} /> Preço sugerido (markup 100%)
+              </p>
+              <p className="text-lg font-bold text-success">{formatCurrency(suggestedPrice)}</p>
+            </div>
+
+            {/* Preço de venda */}
+            <div>
+              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de venda (seu preço final)</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
                 <Input
                   type="text"
                   inputMode="numeric"
-                  value={costPrice}
-                  onChange={(e) => setCostPrice(maskBRL(e.target.value))}
+                  value={sellingPrice}
+                  onChange={(e) => setSellingPrice(maskBRL(e.target.value))}
                   placeholder="0,00"
                   className="h-11 pl-9"
                 />
               </div>
             </div>
-          )}
 
-          {/* Custos variáveis vinculados */}
-          <div className="border border-border rounded-lg p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-muted-foreground">Custos Variáveis</p>
-              {onOpenCosts && (
-                <Button type="button" variant="ghost" size="sm" onClick={onOpenCosts} className="h-6 text-xs text-brand-hover hover:text-brand-primary px-2">
-                  + Criar
-                </Button>
-              )}
-            </div>
+            <div className="border-t border-border" />
 
-            {variableCosts.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic px-1">Nenhum custo cadastrado.</p>
-            ) : (
-              <div className="space-y-1.5">
-                {variableCosts.map((vc) => {
-                  const checked = selectedVariableCostIds.includes(vc.id);
-                  return (
-                    <button
-                      key={vc.id}
-                      type="button"
-                      onClick={() => toggleVariableCost(vc.id)}
-                      className="w-full flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-brand-light transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={cn(
-                            "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
-                            checked
-                              ? "bg-brand-primary border-brand-primary"
-                              : "border-muted-foreground/40 bg-background"
-                          )}
-                        >
-                          {checked && <Check size={10} className="text-white" strokeWidth={3} />}
-                        </div>
-                        <span className="text-sm">{vc.name}</span>
-                      </div>
-                      <span className="text-sm text-muted-foreground shrink-0">{formatCurrency(Number(vc.value))}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {selectedVariableCostIds.length > 0 && (
-              <div className="flex items-center justify-between pt-1 border-t border-border">
-                <span className="text-xs text-muted-foreground">Subtotal selecionado</span>
-                <span className="text-xs font-semibold text-brand-hover">{formatCurrency(selectedVarTotal)}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Custo fixo (automático) */}
-          <div className="bg-muted border border-border rounded-lg p-3">
-            <p className="text-xs text-muted-foreground mb-1">Custo fixo total (automático)</p>
-            <p className={cn("text-lg font-bold", ignoreFixedCosts && "line-through text-muted-foreground")}>
-              {formatCurrency(totalFixedCost)}
-            </p>
-          </div>
-
-          {/* Ignorar custos fixos */}
-          <button
-            type="button"
-            onClick={() => setIgnoreFixedCosts((v) => !v)}
-            className="flex items-center gap-2.5 w-full text-left"
-          >
-            <div
-              className={cn(
-                "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
-                ignoreFixedCosts
-                  ? "bg-brand-primary border-brand-primary"
-                  : "border-muted-foreground/40 bg-background"
-              )}
-            >
-              {ignoreFixedCosts && <Check size={10} className="text-white" strokeWidth={3} />}
-            </div>
-            <span className="text-sm text-muted-foreground">Ignorar custos fixos neste produto</span>
-          </button>
-
-          <div className="border-t border-border" />
-
-          {/* Preço sugerido */}
-          <div className="bg-success/10 border border-success/30 rounded-lg p-3">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-              <Lightbulb size={12} /> Preço sugerido (markup 100%)
-            </p>
-            <p className="text-lg font-bold text-success">{formatCurrency(suggestedPrice)}</p>
-          </div>
-
-          {/* Preço de venda */}
-          <div>
-            <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de venda (seu preço final)</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
-              <Input
-                type="text"
-                inputMode="numeric"
-                value={sellingPrice}
-                onChange={(e) => setSellingPrice(maskBRL(e.target.value))}
-                placeholder="0,00"
-                className="h-11 pl-9"
-              />
-            </div>
-          </div>
-
-          <div className="border-t border-border" />
-
-          {/* Lucro estimado */}
-          <div className="bg-muted border border-border rounded-lg p-3">
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-              <Sparkles size={12} /> Lucro estimado por unidade
-            </p>
-            <p className={`text-lg font-bold ${profit >= 0 ? "text-success" : "text-destructive"}`}>
-              {formatCurrency(profit)}
-            </p>
-            {sp > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                (Preço {formatCurrency(sp)} - Custos {formatCurrency(effectiveFixedCost + cp + selectedVarTotal)})
+            {/* Lucro estimado */}
+            <div className="bg-muted border border-border rounded-lg p-3">
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <Sparkles size={12} /> Lucro estimado por unidade
               </p>
-            )}
-          </div>
+              <p className={`text-lg font-bold ${profit >= 0 ? "text-success" : "text-destructive"}`}>
+                {formatCurrency(profit)}
+              </p>
+              {sp > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  (Preço {formatCurrency(sp)} - Custos {formatCurrency(effectiveFixedCost + cp + selectedVarTotal)})
+                </p>
+              )}
+            </div>
 
-          <div className="flex gap-3 pt-2">
-            <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
-            <Button className="flex-1 bg-brand-primary hover:bg-brand-hover text-white" onClick={handleSave} disabled={saving}>
-              {saving ? "Salvando..." : (localEntryType === "service" ? "Salvar Serviço" : "Salvar Produto")}
-            </Button>
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
+              <Button className="flex-1 bg-brand-primary hover:bg-brand-hover text-white" onClick={handleSave} disabled={saving}>
+                {saving ? "Salvando..." : (localEntryType === "service" ? "Salvar Serviço" : "Salvar Produto")}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

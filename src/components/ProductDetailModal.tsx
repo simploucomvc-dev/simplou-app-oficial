@@ -1,23 +1,24 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
-import { ICON_MAP, getProductIconName } from "@/lib/product-icons";
-import { Package, Pencil, Trash2, AlignLeft, Sparkles, AlertCircle } from "lucide-react";
-import type { Product } from "@/pages/ProductsPage";
+import { ICON_MAP, getProductIconName, calcFixedCostForProduct } from "@/lib/product-icons";
+import { Package, Pencil, Trash2, AlignLeft, Sparkles } from "lucide-react";
+import type { Product, FixedCost } from "@/pages/ProductsPage";
 
 interface Props {
     product: Product | null;
-    totalFixedCost: number;
+    fixedCosts: FixedCost[];
+    usdRate?: number;
     onClose: () => void;
     onEdit: () => void;
     onDelete: () => void;
 }
 
-export default function ProductDetailModal({ product, totalFixedCost, onClose, onEdit, onDelete }: Props) {
+export default function ProductDetailModal({ product, fixedCosts, usdRate = 1, onClose, onEdit, onDelete }: Props) {
     if (!product) return null;
 
     const IconComponent = ICON_MAP[getProductIconName(product.id)] || Package;
-    const fc = product.ignore_fixed_costs ? 0 : totalFixedCost;
+    const fc = product.ignore_fixed_costs ? 0 : calcFixedCostForProduct(fixedCosts, Number(product.selling_price), Number(product.cost_price), usdRate);
     const profit = Number(product.selling_price) - Number(product.variable_cost) - fc - Number(product.cost_price);
 
     return (

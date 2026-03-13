@@ -16,15 +16,23 @@ import {
   Clock,
   Handshake,
 } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { QuickActionButton } from "./QuickActionButton";
+import { OnboardingButton } from "./OnboardingButton";
+import { isFirstTimeUser, startOnboarding } from "@/lib/onboarding";
+import "@/styles/onboarding.css";
 
-const navItems = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/produtos", label: "Produtos e Serviços", icon: Package },
-  { to: "/operacoes", label: "Operações", icon: ArrowLeftRight },
+const mainNavItems = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: undefined },
+  { to: "/produtos", label: "Produtos e Serviços", icon: Package, id: "nav-produtos" },
+  { to: "/financeiro", label: "Financeiro", icon: ArrowLeftRight, id: "nav-financeiro" },
+];
+
+const bottomNavItems = [
   { to: "/configuracoes", label: "Configurações", icon: Settings },
+  { to: "/ajuda", label: "Ajuda", icon: HelpCircle },
 ];
 
 function RoleBadge({ role }: { role: string | undefined }) {
@@ -62,6 +70,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
+
+  // Inicia o tour automaticamente no primeiro acesso
+  useEffect(() => {
+    if (isFirstTimeUser()) {
+      const timer = setTimeout(() => startOnboarding(), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   const toggleExpanded = () => {
     setExpanded((prev) => {
@@ -184,10 +200,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Nav links */}
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => (
+        {mainNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
+            id={item.id}
             end={item.to === "/"}
             onClick={() => mobile && setMobileOpen(false)}
             className={({ isActive }) =>
@@ -211,35 +228,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
           </NavLink>
         ))}
-
-        {/* Help link */}
-        <NavLink
-          to="/ajuda"
-          onClick={() => mobile && setMobileOpen(false)}
-          className={({ isActive }) =>
-            cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
-              isActive
-                ? "bg-brand-light text-brand-hover font-semibold"
-                : "text-muted-foreground hover:bg-accent hover:text-foreground",
-              !expanded && !mobile && "justify-center px-2"
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <HelpCircle
-                size={18}
-                className={cn("shrink-0", isActive ? "text-brand-hover" : "text-muted-foreground")}
-              />
-              {(expanded || mobile) && <span>Ajuda</span>}
-            </>
-          )}
-        </NavLink>
       </nav>
 
-      {/* Bottom: User avatar + mini menu */}
-      <div className="border-t border-border px-2 py-3 shrink-0">
+      {/* Bottom: Configurações + Ajuda + User */}
+      <div className="border-t border-border px-2 pt-2 pb-3 shrink-0 space-y-0.5">
+        {bottomNavItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            onClick={() => mobile && setMobileOpen(false)}
+            className={({ isActive }) =>
+              cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150",
+                isActive
+                  ? "bg-brand-light text-brand-hover font-semibold"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                !expanded && !mobile && "justify-center px-2"
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <item.icon
+                  size={18}
+                  className={cn("shrink-0", isActive ? "text-brand-hover" : "text-muted-foreground")}
+                />
+                {(expanded || mobile) && <span>{item.label}</span>}
+              </>
+            )}
+          </NavLink>
+        ))}
+        <div className="border-t border-border my-1" />
         <UserMenu />
       </div>
     </div>
@@ -284,40 +303,43 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </button>
           <img src="/simplo-verde.png" alt="simplou" className="h-8" />
           {/* Avatar no canto direito no mobile top bar */}
-          <button onClick={() => setMenuOpen((v) => !v)} className="relative">
-            <Avatar size={32} />
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} />
-                <div className="absolute right-0 top-10 z-50 bg-card border border-border rounded-xl shadow-lg py-1.5 min-w-[180px]">
-                  <div className="px-3 py-2 border-b border-border mb-1">
-                    <p className="text-xs font-semibold truncate">{profile?.name || user?.email}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
-                    <div className="mt-1"><RoleBadge role={profile?.role} /></div>
+          <div className="flex items-center gap-2 shrink-0">
+            <OnboardingButton side="bottom" />
+            <button onClick={() => setMenuOpen((v) => !v)} className="relative shrink-0">
+              <Avatar size={32} />
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); }} />
+                  <div className="absolute right-0 top-10 z-50 bg-card border border-border rounded-xl shadow-lg py-1.5 min-w-[180px]">
+                    <div className="px-3 py-2 border-b border-border mb-1">
+                      <p className="text-xs font-semibold truncate">{profile?.name || user?.email}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
+                      <div className="mt-1"><RoleBadge role={profile?.role} /></div>
+                    </div>
+                    <button
+                      onClick={() => { setMenuOpen(false); navigate("/configuracoes"); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                    >
+                      <Settings size={14} /> Configurações
+                    </button>
+                    <button
+                      onClick={() => { setMenuOpen(false); navigate("/ajuda"); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                    >
+                      <HelpCircle size={14} /> Ajuda
+                    </button>
+                    <div className="border-t border-border my-1" />
+                    <button
+                      onClick={() => { setMenuOpen(false); handleSignOut(); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-destructive/10 text-destructive transition-colors text-left"
+                    >
+                      <LogOut size={14} /> Sair
+                    </button>
                   </div>
-                  <button
-                    onClick={() => { setMenuOpen(false); navigate("/configuracoes"); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
-                  >
-                    <Settings size={14} /> Configurações
-                  </button>
-                  <button
-                    onClick={() => { setMenuOpen(false); navigate("/ajuda"); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
-                  >
-                    <HelpCircle size={14} /> Ajuda
-                  </button>
-                  <div className="border-t border-border my-1" />
-                  <button
-                    onClick={() => { setMenuOpen(false); handleSignOut(); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-destructive/10 text-destructive transition-colors text-left"
-                  >
-                    <LogOut size={14} /> Sair
-                  </button>
-                </div>
-              </>
-            )}
-          </button>
+                </>
+              )}
+            </button>
+          </div>
         </header>
       )}
 
@@ -332,6 +354,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+
+      {/* Botão flutuante de nova operação */}
+      <QuickActionButton />
+
+      {/* Botão de repetir tour (apenas Desktop) */}
+      {!isMobile && <OnboardingButton className="fixed top-4 right-4" side="left" />}
     </div>
   );
 }

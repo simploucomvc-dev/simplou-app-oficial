@@ -1,0 +1,177 @@
+/* Overlay escuro — aplicado ao path para não escurecer o spotlight */
+.driver-overlay path {
+  fill: #000 !important;
+  opacity: 0.72 !important;
+}
+
+.driver-overlay {
+  background-color: transparent !important;
+}
+
+/* Spotlight — borda verde da marca */
+.driver-active-element,
+.driver-active .driver-overlay-svg {
+  border-radius: 8px;
+}
+
+/* Popover container */
+.simplou-tour-popover.driver-popover {
+  max-width: 380px;
+  border-radius: 14px;
+  border: 1.5px solid #e5e5e5;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+  padding: 0;
+  overflow: hidden;
+  font-family: "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+/* Barra de progresso no topo */
+.simplou-tour-popover .driver-popover-progress-text {
+  font-size: 11px;
+  color: #999;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* Título */
+.simplou-tour-popover .driver-popover-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111;
+  padding: 20px 20px 6px;
+  margin: 0;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.onboarding-icon {
+  color: #7dc400;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Descrição */
+.simplou-tour-popover .driver-popover-description {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #555;
+  padding: 0 20px 16px;
+  margin: 0;
+}
+
+/* Footer com botões */
+.simplou-tour-popover .driver-popover-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid #f0f0f0;
+  background: #fafafa;
+  gap: 8px;
+}
+
+/* Botão Próximo */
+.simplou-tour-popover .driver-popover-next-btn {
+  background: #7dc400 !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-shadow: none !important;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.simplou-tour-popover .driver-popover-next-btn:hover {
+  background: #5e9600 !important;
+  transform: translateY(-1px);
+}
+
+/* Botão Anterior */
+.simplou-tour-popover .driver-popover-prev-btn {
+  background: white !important;
+  color: #333 !important;
+  border: 1.5px solid #e0e0e0 !important;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.simplou-tour-popover .driver-popover-prev-btn:hover {
+  border-color: #7dc400 !important;
+}
+
+/* Botão Fechar (X) */
+.simplou-tour-popover .driver-popover-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f0f0f0 !important;
+  color: #666 !important;
+  border: none !important;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.simplou-tour-popover .driver-popover-close-btn:hover {
+  background: #e0e0e0 !important;
+}
+
+/* Seta do popover */
+.simplou-tour-popover .driver-popover-arrow {
+  border-color: transparent;
+}
+
+/* Animação de entrada */
+@keyframes simplou-popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.simplou-tour-popover {
+  animation: simplou-popover-in 0.18s ease;
+}
+
+/* Responsivo mobile */
+@media (max-width: 640px) {
+  .simplou-tour-popover.driver-popover {
+    max-width: 92vw;
+  }
+
+  .simplou-tour-popover .driver-popover-title {
+    font-size: 15px;
+    padding: 16px 16px 6px;
+  }
+
+  .simplou-tour-popover .driver-popover-description {
+    font-size: 13px;
+    padding: 0 16px 14px;
+  }
+
+  .simplou-tour-popover .driver-popover-footer {
+    padding: 10px 16px;
+  }
+}

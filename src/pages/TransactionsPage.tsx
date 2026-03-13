@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency, formatDate, MONTHS } from "@/lib/format";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, ArrowDownCircle, ArrowUpCircle, Wallet, ClipboardList, Plus, Calendar, Search, X, Package, Check, ChevronsUpDown } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowDownCircle, ArrowUpCircle, Wallet, ClipboardList, Plus, Calendar, Search, X, Package, Check, ChevronsUpDown, RefreshCw } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ExpandableInput } from "@/components/ui/expandable-input";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,8 @@ import ClickUpDatePicker from "@/components/ui/clickup-datepicker";
 import { Switch } from "@/components/ui/switch";
 import { format, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
+import { maskBRL, parseBRL } from "@/lib/product-icons";
+import { getUSDRate } from "@/lib/exchange-rate";
 
 export interface Transaction {
   id: string;
@@ -31,6 +34,7 @@ export interface Transaction {
 
 export default function TransactionsPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -51,6 +55,37 @@ export default function TransactionsPage() {
   const [isRecurrent, setIsRecurrent] = useState(false);
   const [recurrentMonths, setRecurrentMonths] = useState("6");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [isUSD, setIsUSD] = useState(false);
+  const [usdRate, setUsdRate] = useState(5.50);
+  const [rateLoading, setRateLoading] = useState(false);
+
+  const loadRate = async (): Promise<number> => {
+    setRateLoading(true);
+    try {
+      const rate = await getUSDRate();
+      setUsdRate(rate);
+      toast.success(`Cotação: US$ 1 = R$ ${rate.toFixed(2)}`);
+      return rate;
+    } catch {
+      toast.error("Não foi possível buscar a cotação");
+      return usdRate;
+    } finally {
+      setRateLoading(false);
+    }
+  };
+
+  const toggleCurrency = async () => {
+    if (!isUSD) {
+      const rate = await loadRate();
+      setIsUSD(true);
+      const brlVal = parseBRL(value);
+      if (brlVal > 0) setValue(maskBRL(String(Math.round((brlVal / rate) * 100))));
+    } else {
+      setIsUSD(false);
+      const usdVal = parseBRL(value);
+      if (usdVal > 0) setValue(maskBRL(String(Math.round(usdVal * usdRate * 100))));
+    }
+  };
 
   const fetchTransactions = useCallback(async () => {
     if (!user) return;
@@ -96,21 +131,33 @@ export default function TransactionsPage() {
     setIsRecurrent(false);
     setRecurrentMonths("6");
     setAttachmentFile(null);
+    setIsUSD(false);
     setModalOpen(true);
   };
+
+  // Abre modal automaticamente quando navegado com ?new=1 (ex: botão flutuante)
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      openModal();
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
 
   const handleProductLink = (productId: string) => {
     setLinkedProductId(productId);
     if (productId) {
       const prod = availableProducts.find((p) => p.id === productId);
-      if (prod?.selling_price) setValue(String(prod.selling_price));
+      if (prod?.selling_price) {
+        setIsUSD(false);
+        setValue(maskBRL(String(Math.round(prod.selling_price * 100))));
+      }
     }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!description.trim() || !value || !user) { toast.error("Preencha todos os campos"); return; }
-    const val = parseFloat(value);
+    const val = parseBRL(value) * (isUSD ? usdRate : 1);
     if (val <= 0) { toast.error("Valor deve ser positivo"); return; }
 
     setSaving(true);
@@ -222,7 +269,7 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold flex items-center gap-2">
-          <Wallet size={20} /> Minhas Operações
+          <Wallet size={20} /> Financeiro
         </h1>
         <Button onClick={openModal} size="sm" className="gap-2 bg-brand-primary hover:bg-brand-hover text-white">
           <Plus size={16} /> Nova Operação
@@ -301,16 +348,20 @@ export default function TransactionsPage() {
                 <div key={key} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
                   <button
                     onClick={() => toggleMonth(key)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-accent/50 transition-colors"
+                    className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-accent/50 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      {isExpanded ? <ChevronDown size={15} className="text-muted-foreground" /> : <ChevronRight size={15} className="text-muted-foreground" />}
-                      <span className="font-semibold text-sm">{MONTHS[month]} {year}</span>
-                      <span className="text-xs text-muted-foreground">{txs.length} operações</span>
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      {isExpanded ? <ChevronDown size={15} className="text-muted-foreground shrink-0" /> : <ChevronRight size={15} className="text-muted-foreground shrink-0" />}
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3 text-left min-w-0">
+                        <span className="font-semibold text-sm truncate">{MONTHS[month]} {year}</span>
+                        <span className="text-xs text-muted-foreground truncate whitespace-nowrap">
+                          {txs.length} {txs.length === 1 ? "operação" : "operações"}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-xs font-medium">
-                      <span className="text-success">+{formatCurrency(monthIncome)}</span>
-                      <span className="text-destructive">-{formatCurrency(monthExpense)}</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center items-end gap-0.5 sm:gap-3 text-xs font-medium shrink-0">
+                      <span className="text-success whitespace-nowrap">+{formatCurrency(monthIncome)}</span>
+                      <span className="text-destructive whitespace-nowrap">-{formatCurrency(monthExpense)}</span>
                     </div>
                   </button>
                   {isExpanded && (
@@ -355,7 +406,7 @@ export default function TransactionsPage() {
 
       {/* Nova Operação Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
+        <DialogContent className="sm:max-w-md w-[95vw] max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold">Nova Operação</DialogTitle>
           </DialogHeader>
@@ -459,16 +510,60 @@ export default function TransactionsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Valor (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  placeholder="99.90"
-                  className="h-11"
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label className="text-muted-foreground text-sm font-medium">Valor</Label>
+                  <div className="flex items-center gap-1.5">
+                    {isUSD && <span className="text-xs text-muted-foreground">US$ 1 = R$ {usdRate.toFixed(2)}</span>}
+                    <div className="flex h-7 rounded-lg border-2 border-border overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => !isUSD || toggleCurrency()}
+                        disabled={rateLoading}
+                        className={`px-2.5 text-xs font-bold transition-all ${!isUSD ? "bg-brand-primary text-white" : "text-muted-foreground hover:bg-accent"}`}
+                      >
+                        R$
+                      </button>
+                      <div className="w-px bg-border" />
+                      <button
+                        type="button"
+                        onClick={() => isUSD || toggleCurrency()}
+                        disabled={rateLoading}
+                        className={`px-2 text-xs font-bold transition-all flex items-center gap-1 ${isUSD ? "bg-brand-primary text-white" : "text-muted-foreground hover:bg-accent"}`}
+                      >
+                        {rateLoading ? <RefreshCw size={10} className="animate-spin" /> : "US$"}
+                      </button>
+                    </div>
+                    {isUSD && (
+                      <button
+                        type="button"
+                        onClick={loadRate}
+                        disabled={rateLoading}
+                        className="p-1 rounded hover:bg-accent text-muted-foreground transition-colors"
+                        title="Atualizar cotação"
+                      >
+                        <RefreshCw size={11} className={rateLoading ? "animate-spin" : ""} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium pointer-events-none">
+                    {isUSD ? "US$" : "R$"}
+                  </span>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={value}
+                    onChange={(e) => setValue(maskBRL(e.target.value))}
+                    placeholder="0,00"
+                    className="h-11 pl-10"
+                  />
+                </div>
+                {isUSD && parseBRL(value) > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ≈ R$ {maskBRL(String(Math.round(parseBRL(value) * usdRate * 100)))}
+                  </p>
+                )}
               </div>
               <div>
                 <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Data</Label>
@@ -597,16 +692,20 @@ export default function TransactionsPage() {
                     <div key={key} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
                       <button
                         onClick={() => toggleFutureMonth(key)}
-                        className="w-full flex items-center justify-between px-4 py-3 hover:bg-accent/50 transition-colors"
+                        className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-accent/50 transition-colors"
                       >
-                        <div className="flex items-center gap-3">
-                          {isExpanded ? <ChevronDown size={15} className="text-muted-foreground" /> : <ChevronRight size={15} className="text-muted-foreground" />}
-                          <span className="font-semibold text-sm">{MONTHS[month]} {year}</span>
-                          <span className="text-xs text-muted-foreground">{txs.length} operações</span>
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                          {isExpanded ? <ChevronDown size={15} className="text-muted-foreground shrink-0" /> : <ChevronRight size={15} className="text-muted-foreground shrink-0" />}
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3 text-left min-w-0">
+                            <span className="font-semibold text-sm truncate">{MONTHS[month]} {year}</span>
+                            <span className="text-xs text-muted-foreground truncate whitespace-nowrap">
+                              {txs.length} {txs.length === 1 ? "operação" : "operações"}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 text-xs font-medium">
-                          <span className="text-success">+{formatCurrency(monthIncome)}</span>
-                          <span className="text-destructive">-{formatCurrency(monthExpense)}</span>
+                        <div className="flex flex-col sm:flex-row sm:items-center items-end gap-0.5 sm:gap-3 text-xs font-medium shrink-0">
+                          <span className="text-success whitespace-nowrap">+{formatCurrency(monthIncome)}</span>
+                          <span className="text-destructive whitespace-nowrap">-{formatCurrency(monthExpense)}</span>
                         </div>
                       </button>
                       {isExpanded && (

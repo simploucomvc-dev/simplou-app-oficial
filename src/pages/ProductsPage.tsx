@@ -11,6 +11,9 @@ import { toast } from "sonner";
 import ProductModal from "@/components/ProductModal";
 import ProductDetailModal from "@/components/ProductDetailModal";
 import FixedCostsModal from "@/components/FixedCostsModal";
+import { calcFixedCostForProduct } from "@/lib/product-icons";
+import { getUSDRate } from "@/lib/exchange-rate";
+import { SafeDeleteDialog } from "@/components/ui/safe-delete-dialog";
 
 export interface Product {
   id: string;
@@ -29,6 +32,8 @@ export interface FixedCost {
   value: number;
   is_active: boolean;
   type?: "fixed" | "variable";
+  value_type?: "fixed" | "percentage" | "usd";
+  percentage_base?: "selling_price" | "cost_price";
 }
 
 type EntryType = "product" | "service";
@@ -74,7 +79,7 @@ function EntryTypeSelectorDialog({
 }
 
 export default function ProductsPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [fixedCosts, setFixedCosts] = useState<FixedCost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,34 +88,52 @@ export default function ProductsPage() {
   const [fixedCostsModal, setFixedCostsModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [filterType, setFilterType] = useState<"all" | "product" | "service">("all");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [usdRate, setUsdRate] = useState(5.50);
 
-  const totalFixedCost = fixedCosts.filter((c) => c.is_active).reduce((s, c) => s + Number(c.value), 0);
+  const getProductCosts = (p: Product) => {
+    const fc = p.ignore_fixed_costs ? 0 : calcFixedCostForProduct(fixedCosts, Number(p.selling_price), Number(p.cost_price), usdRate);
+    const variable = Number(p.variable_cost) || 0;
+    const purchase = Number(p.cost_price) || 0;
+    return { fc, variable, purchase, total: fc + variable + purchase };
+  };
 
   const calcProfit = (p: Product) => {
-    const fc = p.ignore_fixed_costs ? 0 : totalFixedCost;
-    return Number(p.selling_price) - Number(p.variable_cost) - fc - Number(p.cost_price);
+    const { total } = getProductCosts(p);
+    return Number(p.selling_price) - total;
   };
 
   const fetchData = useCallback(async () => {
     if (!user) return;
-    const [{ data: prods }, { data: costs }] = await Promise.all([
+    const rateP = getUSDRate().catch(() => 5.50);
+    const [{ data: prods }, { data: costs }, rate] = await Promise.all([
       supabase.from("products").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("fixed_costs").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
+      rateP
     ]);
     setProducts(prods || []);
     setFixedCosts(costs || []);
+    setUsdRate(rate);
     setLoading(false);
   }, [user]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const deleteProduct = async (id: string) => {
-    const p = products.find((p) => p.id === id);
-    const label = p?.entry_type === "service" ? "serviço" : "produto";
-    if (!confirm(`Tem certeza que deseja excluir este ${label}?`)) return;
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) toast.error("Erro ao excluir");
-    else { toast.success(`${label.charAt(0).toUpperCase() + label.slice(1)} excluído`); fetchData(); }
+    else {
+      toast.success(`Excluído com sucesso`);
+      fetchData();
+      setDeleteDialogOpen(false);
+      setProductToDelete(null);
+    }
+  };
+
+  const confirmDelete = (p: Product) => {
+    setProductToDelete(p);
+    setDeleteDialogOpen(true);
   };
 
   const filteredProducts = products.filter((p) => {
@@ -164,11 +187,16 @@ export default function ProductsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <ShoppingBag size={20} /> Produtos e Serviços
-        </h1>
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <ShoppingBag size={20} /> Produtos e Serviços
+          </h1>
+          {profile?.company_name && (
+            <p className="text-sm text-muted-foreground mt-0.5">{profile.company_name}</p>
+          )}
+        </div>
         <div className="flex gap-2">
-          <Button onClick={() => setSelectorOpen(true)} size="sm">
+          <Button onClick={() => setSelectorOpen(true)} size="sm" className="bg-brand-primary hover:bg-brand-hover text-white">
             <Plus size={16} /> Novo
           </Button>
           <Button variant="outline" size="sm" onClick={() => setFixedCostsModal(true)}>
@@ -221,7 +249,7 @@ export default function ProductsPage() {
                         </span>
                       </div>
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        Custo: {formatCurrency(Number(p.cost_price))} · Preço: {formatCurrency(Number(p.selling_price))}
+                        Custo: {formatCurrency(getProductCosts(p).total)} · Preço: {formatCurrency(Number(p.selling_price))}
                       </p>
                       <p className={`text-sm font-semibold mt-0.5 ${profit >= 0 ? "text-success" : "text-destructive"}`}>
                         Lucro: {formatCurrency(profit)}
@@ -239,7 +267,7 @@ export default function ProductsPage() {
                         <Pencil size={14} className="mr-2" /> Editar
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => deleteProduct(p.id)} className="text-destructive focus:text-destructive">
+                      <DropdownMenuItem onClick={() => confirmDelete(p)} className="text-destructive focus:text-destructive">
                         <Trash2 size={14} className="mr-2" /> Excluir
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -265,7 +293,8 @@ export default function ProductsPage() {
         open={productModal.open}
         product={productModal.product}
         entryType={productModal.entryType || "product"}
-        totalFixedCost={totalFixedCost}
+        fixedCosts={fixedCosts}
+        usdRate={usdRate}
         onClose={() => setProductModal({ open: false })}
         onSaved={fetchData}
         onOpenCosts={() => {
@@ -283,7 +312,8 @@ export default function ProductsPage() {
 
       <ProductDetailModal
         product={selectedProduct}
-        totalFixedCost={totalFixedCost}
+        fixedCosts={fixedCosts}
+        usdRate={usdRate}
         onClose={() => setSelectedProduct(null)}
         onEdit={() => {
           if (selectedProduct) {
@@ -293,11 +323,19 @@ export default function ProductsPage() {
         }}
         onDelete={() => {
           if (selectedProduct) {
-            deleteProduct(selectedProduct.id);
+            confirmDelete(selectedProduct);
             setSelectedProduct(null);
           }
         }}
       />
-    </div>
+
+      <SafeDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={() => productToDelete && deleteProduct(productToDelete.id)}
+        title="Aviso: Exclusão Permanente"
+        itemName={productToDelete?.name || ""}
+      />
+    </div >
   );
 }
