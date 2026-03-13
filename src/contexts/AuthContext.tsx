@@ -26,7 +26,7 @@ interface AuthContextType {
   loading: boolean;
   isTrialExpired: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, name: string, phone: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, name: string, phone: string, companyName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -115,11 +115,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error as Error | null };
   };
 
-  const signUp = async (email: string, password: string, name: string, phone: string) => {
+  const signUp = async (email: string, password: string, name: string, phone: string, companyName: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name, phone } },
+      options: { data: { name, phone, company_name: companyName } },
     });
     return { error: error as Error | null };
   };

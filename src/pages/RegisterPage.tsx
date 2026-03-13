@@ -50,6 +50,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [phone, setPhone] = useState("");
   const [otpToken, setOtpToken] = useState("");
   const [loading, setLoading] = useState(false);
@@ -67,7 +68,7 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !email || !password) {
+    if (!name || !companyName || !phone || !email || !password) {
       toast.error("Preencha todos os campos");
       return;
     }
@@ -81,7 +82,7 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      const { error } = await signUp(email, password, name, phone);
+      const { error } = await signUp(email, password, name, phone, companyName);
       if (error) {
         toast.error(error.message);
       } else {
@@ -187,6 +188,17 @@ export default function RegisterPage() {
                 <XIcon size={10} /> Informe nome e sobrenome
               </p>
             )}
+          </div>
+
+          <div>
+            <Label className="text-muted-foreground text-sm font-medium mb-2 block">Nome da empresa</Label>
+            <Input
+              type="text"
+              placeholder="Sua empresa"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              className="h-12 bg-card border-border rounded-lg px-4"
+            />
           </div>
 
           <div>
