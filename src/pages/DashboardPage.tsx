@@ -4,12 +4,19 @@ import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency, MONTHS_SHORT } from "@/lib/format";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from "recharts";
 import { TrendingUp, TrendingDown, Sparkles, BarChart2 } from "lucide-react";
+import { getUSDRate } from "@/lib/exchange-rate";
+
+interface VarCostEntry {
+  variable_cost_id: string;
+  fixed_costs: { value: number; value_type: string } | null;
+}
 
 interface Transaction {
   id: string;
   type: "income" | "expense";
   value: number;
   date: string;
+  transaction_variable_costs?: VarCostEntry[];
 }
 
 export default function DashboardPage() {
@@ -20,16 +27,19 @@ export default function DashboardPage() {
   const [companyName, setCompanyName] = useState("");
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [usdRate, setUsdRate] = useState(5.50);
 
   useEffect(() => {
     if (!user) return;
     const fetchData = async () => {
       const year = new Date().getFullYear();
-      const [{ data: txData }, { data: profile }] = await Promise.all([
-        supabase.from("transactions").select("id, type, value, date").eq("user_id", user.id).gte("date", `${year}-01-01`).lte("date", `${year}-12-31`),
+      const [{ data: txData }, { data: profile }, rate] = await Promise.all([
+        supabase.from("transactions").select("id, type, value, date, transaction_variable_costs(variable_cost_id, fixed_costs(value, value_type))").eq("user_id", user.id).gte("date", `${year}-01-01`).lte("date", `${year}-12-31`),
         supabase.from("profiles").select("name, company_name, profile_photo_url, company_logo_url").eq("id", user.id).single(),
+        getUSDRate().catch(() => 5.50),
       ]);
       setTransactions(txData || []);
+      setUsdRate(rate);
       if (profile) {
         setProfileName(profile.name || "");
         setCompanyName(profile.company_name || "");
@@ -42,11 +52,23 @@ export default function DashboardPage() {
   }, [user]);
 
   const todayStr = new Date().toISOString().split("T")[0];
-  const receivedIncome = transactions.filter((t) => t.type === "income" && t.date <= todayStr).reduce((s, t) => s + Number(t.value), 0);
+
+  const calcTxVarCosts = (tx: Transaction) =>
+    (tx.transaction_variable_costs || []).reduce((sum, tvc) => {
+      const c = tvc.fixed_costs;
+      if (!c) return sum;
+      if (c.value_type === "percentage") return sum + (Number(tx.value) * Number(c.value)) / 100;
+      if (c.value_type === "usd") return sum + Number(c.value) * usdRate;
+      return sum + Number(c.value);
+    }, 0);
+
+  const receivedIncomeTransactions = transactions.filter((t) => t.type === "income" && t.date <= todayStr);
+  const receivedIncome = receivedIncomeTransactions.reduce((s, t) => s + Number(t.value), 0);
   const futureIncome = transactions.filter((t) => t.type === "income" && t.date > todayStr).reduce((s, t) => s + Number(t.value), 0);
   const totalIncome = receivedIncome;
-  const totalExpense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.value), 0);
-  const profit = totalIncome - totalExpense;
+  const totalExpense = transactions.filter((t) => t.type === "expense" && t.date <= todayStr).reduce((s, t) => s + Number(t.value), 0);
+  const totalVarCosts = receivedIncomeTransactions.reduce((s, t) => s + calcTxVarCosts(t), 0);
+  const profit = totalIncome - totalExpense - totalVarCosts;
 
   const monthlyData = MONTHS_SHORT.map((month, i) => {
     const monthTransactions = transactions.filter((t) => new Date(t.date).getMonth() === i);

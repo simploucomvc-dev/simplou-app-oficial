@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, ArrowDownCircle, ArrowUpCircle, Wallet, ClipboardList, Plus, Calendar, Search, X, Package, Check, ChevronsUpDown, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowDownCircle, ArrowUpCircle, Wallet, ClipboardList, Plus, Calendar, Search, X, Package, Check, ChevronsUpDown, RefreshCw, BookmarkPlus } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ExpandableInput } from "@/components/ui/expandable-input";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,16 @@ import { ptBR } from "date-fns/locale/pt-BR";
 import { maskBRL, parseBRL } from "@/lib/product-icons";
 import { getUSDRate } from "@/lib/exchange-rate";
 
+export interface VariableCostRef {
+  variable_cost_id: string;
+  fixed_costs: { id: string; name: string; value: number; value_type: string; percentage_base?: string; is_active: boolean } | null;
+}
+
+export interface FixedCostRef {
+  fixed_cost_id: string;
+  fixed_costs: { id: string; name: string; value: number; value_type: string; percentage_base?: string } | null;
+}
+
 export interface Transaction {
   id: string;
   type: "income" | "expense";
@@ -30,6 +40,9 @@ export interface Transaction {
   product_id?: string | null;
   products?: { id: string; name: string } | null;
   attachment_url?: string | null;
+  ignore_fixed_costs?: boolean;
+  transaction_variable_costs?: VariableCostRef[];
+  transaction_fixed_costs?: FixedCostRef[];
 }
 
 export default function TransactionsPage() {
@@ -54,10 +67,21 @@ export default function TransactionsPage() {
   const [filterText, setFilterText] = useState("");
   const [isRecurrent, setIsRecurrent] = useState(false);
   const [recurrentMonths, setRecurrentMonths] = useState("6");
+  const [productPopoverOpen, setProductPopoverOpen] = useState(false);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [isUSD, setIsUSD] = useState(false);
   const [usdRate, setUsdRate] = useState(5.50);
   const [rateLoading, setRateLoading] = useState(false);
+
+  // Custos por transação
+  const [availableFixedCosts, setAvailableFixedCosts] = useState<{ id: string; name: string; value: number; value_type: string }[]>([]);
+  const [availableVariableCosts, setAvailableVariableCosts] = useState<{ id: string; name: string; value: number; value_type: string }[]>([]);
+  const [fixedCostMode, setFixedCostMode] = useState<"all" | "none" | "custom">("all");
+  const [selectedFixedCostIds, setSelectedFixedCostIds] = useState<string[]>([]);
+  // Modo de custo variável: "saved" = selecionar cadastrado, "manual" = digitar
+  const [varCostMode, setVarCostMode] = useState<"saved" | "manual">("saved");
+  const [selectedVariableCostIds, setSelectedVariableCostIds] = useState<string[]>([]);
+  const [manualVarCosts, setManualVarCosts] = useState<{ id: string; name: string; value: string; isUSD: boolean }[]>([]);
 
   const loadRate = async (): Promise<number> => {
     setRateLoading(true);
@@ -91,7 +115,7 @@ export default function TransactionsPage() {
     if (!user) return;
     const { data } = await supabase
       .from("transactions")
-      .select("*, products(id, name)")
+      .select("*, products(id, name), transaction_variable_costs(variable_cost_id, fixed_costs(id, name, value, value_type, percentage_base, is_active)), transaction_fixed_costs(fixed_cost_id, fixed_costs(id, name, value, value_type, percentage_base))")
       .eq("user_id", user.id)
       .order("date", { ascending: false });
     setTransactions(data || []);
@@ -120,6 +144,10 @@ export default function TransactionsPage() {
     if (!user) return;
     supabase.from("products").select("id, name, selling_price").eq("user_id", user.id)
       .then(({ data }) => setAvailableProducts(data || []));
+    supabase.from("fixed_costs").select("id, name, value, value_type").eq("user_id", user.id).eq("is_active", true).eq("type", "fixed")
+      .then(({ data }) => setAvailableFixedCosts(data || []));
+    supabase.from("fixed_costs").select("id, name, value, value_type").eq("user_id", user.id).eq("is_active", true).eq("type", "variable")
+      .then(({ data }) => setAvailableVariableCosts(data || []));
   }, [user]);
 
   const openModal = () => {
@@ -132,6 +160,11 @@ export default function TransactionsPage() {
     setRecurrentMonths("6");
     setAttachmentFile(null);
     setIsUSD(false);
+    setFixedCostMode("all");
+    setSelectedFixedCostIds([]);
+    setVarCostMode("saved");
+    setSelectedVariableCostIds([]);
+    setManualVarCosts([{ id: crypto.randomUUID(), name: "", value: "", isUSD: false }]);
     setModalOpen(true);
   };
 
@@ -177,12 +210,99 @@ export default function TransactionsPage() {
         value: val,
         date: dateStr,
         product_id: linkedProductId || null,
+        ignore_fixed_costs: type === "income" ? fixedCostMode === "none" : false,
       });
     }
 
     const { data: insertedData, error } = await supabase.from("transactions").insert(transactionsToInsert).select();
 
     if (error) { setSaving(false); toast.error("Erro ao salvar"); return; }
+
+    // Vincular custos à(s) transação(ões) criada(s)
+    if (insertedData && insertedData.length > 0 && type === "income") {
+      // Custos fixos selecionados manualmente
+      if (fixedCostMode === "custom" && selectedFixedCostIds.length > 0) {
+        await supabase.from("transaction_fixed_costs").insert(
+          insertedData.flatMap((tx) =>
+            selectedFixedCostIds.map((fcId) => ({ transaction_id: tx.id, fixed_cost_id: fcId }))
+          )
+        );
+      }
+
+      // Custos variáveis — modo "salvo"
+      if (varCostMode === "saved" && selectedVariableCostIds.length > 0) {
+        await supabase.from("transaction_variable_costs").insert(
+          insertedData.flatMap((tx) =>
+            selectedVariableCostIds.map((vcId) => ({ transaction_id: tx.id, variable_cost_id: vcId }))
+          )
+        );
+      }
+
+      // Custos variáveis — modo "manual"
+      if (varCostMode === "manual") {
+        const validManual = manualVarCosts.filter((c) => parseBRL(c.value) > 0);
+        if (validManual.length > 0) {
+          const { data: newCosts } = await supabase
+            .from("fixed_costs")
+            .insert(
+              validManual.map((c) => ({
+                user_id: user.id,
+                name: c.name.trim() || "Custo pontual",
+                value: parseBRL(c.value),
+                value_type: c.isUSD ? "usd" : "fixed",
+                type: "variable",
+                is_active: false,
+              }))
+            )
+            .select("id, name");
+
+          if (newCosts) {
+            await supabase.from("transaction_variable_costs").insert(
+              insertedData.flatMap((tx) =>
+                newCosts.map((nc) => ({ transaction_id: tx.id, variable_cost_id: nc.id }))
+              )
+            );
+
+            // Toast para salvar custos nomeados como reutilizáveis
+            const namedIds = newCosts
+              .filter((_, i) => validManual[i]?.name.trim())
+              .map((nc) => nc.id);
+
+            if (namedIds.length > 0) {
+              setTimeout(() => {
+                toast(
+                  <span className="flex items-center gap-2">
+                    <BookmarkPlus size={15} className="shrink-0 text-green-700" />
+                    Deseja salvar esses custos para usar em outras transações?
+                  </span>,
+                  {
+                    duration: 20000,
+                    style: {
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      color: "#166534",
+                    },
+                    action: {
+                      label: "Salvar",
+                      onClick: async () => {
+                        await supabase
+                          .from("fixed_costs")
+                          .update({ is_active: true })
+                          .in("id", namedIds);
+                        toast.success("Custos salvos para uso futuro!");
+                      },
+                    },
+                    cancel: {
+                      label: "Agora não",
+                      onClick: () => {},
+                    },
+                  });
+              }, 400);
+            }
+          }
+        }
+      }
+    }
 
     if (attachmentFile && insertedData && insertedData.length > 0) {
       try {
@@ -405,7 +525,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Nova Operação Modal */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+      <Dialog open={modalOpen} onOpenChange={(open) => { setModalOpen(open); if (!open) setProductPopoverOpen(false); }}>
         <DialogContent className="sm:max-w-md w-[95vw] max-h-[75dvh] sm:max-h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl">
           <DialogHeader className="px-6 pt-6 pb-2 border-b shrink-0">
             <DialogTitle className="text-lg font-bold">Nova Operação</DialogTitle>
@@ -436,11 +556,12 @@ export default function TransactionsPage() {
                 <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
                   Produto vinculado <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
                 </Label>
-                <Popover>
+                <Popover open={productPopoverOpen} onOpenChange={setProductPopoverOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       role="combobox"
+                      aria-expanded={productPopoverOpen}
                       className="w-full justify-between h-11 font-normal bg-background"
                     >
                       {linkedProductId
@@ -459,6 +580,7 @@ export default function TransactionsPage() {
                             value="none"
                             onSelect={() => {
                               handleProductLink("");
+                              setProductPopoverOpen(false);
                             }}
                           >
                             Nenhum produto
@@ -473,7 +595,10 @@ export default function TransactionsPage() {
                             <CommandItem
                               key={p.id}
                               value={p.name}
-                              onSelect={() => handleProductLink(p.id)}
+                              onSelect={() => {
+                                handleProductLink(p.id);
+                                setProductPopoverOpen(false);
+                              }}
                             >
                               {p.name}
                               <Check
@@ -503,7 +628,7 @@ export default function TransactionsPage() {
                 <ExpandableInput
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Ex: Venda do produto X"
+                  placeholder={type === "income" ? "Ex: Venda do produto X" : "Ex: Conta de luz, Fornecedor..."}
                   modalTitle="Descrição da Operação"
                   rows={2}
                   autoFocus
@@ -597,6 +722,252 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
+              {/* Custos desta entrada */}
+              {type === "income" && (availableFixedCosts.length > 0 || availableVariableCosts.length > 0) && (
+                <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/10">
+                  <p className="text-sm font-semibold">Custos desta entrada</p>
+
+                  {/* Custos Variáveis */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-xs text-muted-foreground">Custos Variáveis</Label>
+                      <div className="flex rounded-md border border-border overflow-hidden text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setVarCostMode("saved")}
+                          className={cn("px-2.5 py-1 font-medium transition-colors", varCostMode === "saved" ? "bg-brand-primary text-white" : "text-muted-foreground hover:bg-accent")}
+                        >
+                          Usar salvo
+                        </button>
+                        <div className="w-px bg-border" />
+                        <button
+                          type="button"
+                          onClick={() => setVarCostMode("manual")}
+                          className={cn("px-2.5 py-1 font-medium transition-colors", varCostMode === "manual" ? "bg-brand-primary text-white" : "text-muted-foreground hover:bg-accent")}
+                        >
+                          Manual
+                        </button>
+                      </div>
+                    </div>
+
+                    {varCostMode === "saved" ? (
+                      availableVariableCosts.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic px-1 py-2">Nenhum custo variável cadastrado. Use o modo Manual ou cadastre em Custos.</p>
+                      ) : (
+                        <div className="space-y-1">
+                          {availableVariableCosts.map((vc) => {
+                            const checked = selectedVariableCostIds.includes(vc.id);
+                            return (
+                              <button
+                                key={vc.id}
+                                type="button"
+                                onClick={() => setSelectedVariableCostIds((prev) =>
+                                  prev.includes(vc.id) ? prev.filter((x) => x !== vc.id) : [...prev, vc.id]
+                                )}
+                                className="w-full flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-accent transition-colors text-left"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors", checked ? "bg-brand-primary border-brand-primary" : "border-muted-foreground/40 bg-background")}>
+                                    {checked && <Check size={10} className="text-white" strokeWidth={3} />}
+                                  </div>
+                                  <span className="text-sm">{vc.name}</span>
+                                </div>
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {vc.value_type === "percentage"
+                                    ? `${Number(vc.value)}%`
+                                    : vc.value_type === "usd"
+                                    ? `US$ ${Number(vc.value).toFixed(2)} ≈ ${formatCurrency(Number(vc.value) * usdRate)}`
+                                    : formatCurrency(Number(vc.value))}
+                                </span>
+                              </button>
+                            );
+                          })}
+                          {selectedVariableCostIds.length > 0 && (
+                            <p className="text-[10px] text-muted-foreground italic px-1">Você pode selecionar mais de um</p>
+                          )}
+                        </div>
+                      )
+                    ) : (
+                      <div className="space-y-2">
+                        {manualVarCosts.map((row, idx) => (
+                          <div key={row.id} className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              placeholder="Nome (opcional)"
+                              value={row.name}
+                              onChange={(e) => setManualVarCosts((prev) => prev.map((r) => r.id === row.id ? { ...r, name: e.target.value } : r))}
+                              className="flex-1 h-9 min-w-0 rounded-md border border-input bg-background px-2.5 text-sm outline-none focus:border-brand-primary"
+                            />
+                            <div className="flex h-9 rounded-md border border-border overflow-hidden shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setManualVarCosts((prev) => prev.map((r) => r.id === row.id ? { ...r, isUSD: false } : r))}
+                                className={cn("px-2 text-xs font-bold transition-colors", !row.isUSD ? "bg-brand-primary text-white" : "text-muted-foreground hover:bg-accent")}
+                              >R$</button>
+                              <div className="w-px bg-border" />
+                              <button
+                                type="button"
+                                onClick={() => setManualVarCosts((prev) => prev.map((r) => r.id === row.id ? { ...r, isUSD: true } : r))}
+                                className={cn("px-2 text-xs font-bold transition-colors", row.isUSD ? "bg-brand-primary text-white" : "text-muted-foreground hover:bg-accent")}
+                              >US$</button>
+                            </div>
+                            <div className="relative shrink-0 w-24">
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="0,00"
+                                value={row.value}
+                                onChange={(e) => setManualVarCosts((prev) => prev.map((r) => r.id === row.id ? { ...r, value: maskBRL(e.target.value) } : r))}
+                                className="h-9 text-sm"
+                              />
+                            </div>
+                            {manualVarCosts.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setManualVarCosts((prev) => prev.filter((r) => r.id !== row.id))}
+                                className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setManualVarCosts((prev) => [...prev, { id: crypto.randomUUID(), name: "", value: "", isUSD: false }])}
+                          className="flex items-center gap-1 text-xs text-brand-primary hover:text-brand-hover transition-colors mt-1"
+                        >
+                          <Plus size={12} /> Adicionar outro custo
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Total de custos variáveis */}
+                    {(() => {
+                      const grossVal = parseBRL(value) * (isUSD ? usdRate : 1);
+                      let varTotal = 0;
+                      if (varCostMode === "saved") {
+                        varTotal = availableVariableCosts
+                          .filter((c) => selectedVariableCostIds.includes(c.id))
+                          .reduce((s, c) => {
+                            if (c.value_type === "percentage") return s + (grossVal * Number(c.value)) / 100;
+                            if (c.value_type === "usd") return s + Number(c.value) * usdRate;
+                            return s + Number(c.value);
+                          }, 0);
+                      } else {
+                        varTotal = manualVarCosts.reduce((s, c) => {
+                          const v = parseBRL(c.value);
+                          return s + (c.isUSD ? v * usdRate : v);
+                        }, 0);
+                      }
+                      if (varTotal <= 0) return null;
+                      return (
+                        <div className="flex justify-between text-xs pt-2 border-t border-border mt-1">
+                          <span className="text-muted-foreground">Total de custos variáveis</span>
+                          <span className="font-semibold text-destructive">-{formatCurrency(varTotal)}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Custos Fixos */}
+                  {availableFixedCosts.length > 0 && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground mb-1.5 block">Custos Fixos</Label>
+                      <div className="flex flex-col gap-1 mb-2">
+                        {(["all", "none", "custom"] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => { setFixedCostMode(mode); if (mode !== "custom") setSelectedFixedCostIds([]); }}
+                            className={cn("flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors text-left", fixedCostMode === mode ? "bg-brand-primary/10 text-brand-primary font-medium" : "hover:bg-accent text-muted-foreground")}
+                          >
+                            <div className={cn("w-3.5 h-3.5 rounded-full border-2 shrink-0 flex items-center justify-center", fixedCostMode === mode ? "border-brand-primary" : "border-muted-foreground/40")}>
+                              {fixedCostMode === mode && <div className="w-1.5 h-1.5 rounded-full bg-brand-primary" />}
+                            </div>
+                            {mode === "all" ? "Aplicar todos os custos fixos" : mode === "none" ? "Ignorar custos fixos" : "Selecionar manualmente"}
+                          </button>
+                        ))}
+                      </div>
+                      {fixedCostMode === "custom" && (
+                        <div className="space-y-1 pl-1">
+                          {availableFixedCosts.map((fc) => {
+                            const checked = selectedFixedCostIds.includes(fc.id);
+                            return (
+                              <button
+                                key={fc.id}
+                                type="button"
+                                onClick={() => setSelectedFixedCostIds((prev) =>
+                                  prev.includes(fc.id) ? prev.filter((x) => x !== fc.id) : [...prev, fc.id]
+                                )}
+                                className="w-full flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-accent transition-colors text-left"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors", checked ? "bg-brand-primary border-brand-primary" : "border-muted-foreground/40 bg-background")}>
+                                    {checked && <Check size={10} className="text-white" strokeWidth={3} />}
+                                  </div>
+                                  <span className="text-sm">{fc.name}</span>
+                                </div>
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {fc.value_type === "percentage"
+                                    ? `${Number(fc.value)}%`
+                                    : fc.value_type === "usd"
+                                    ? `US$ ${Number(fc.value).toFixed(2)} ≈ ${formatCurrency(Number(fc.value) * usdRate)}`
+                                    : formatCurrency(Number(fc.value))}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Resumo de valor líquido */}
+                  {(() => {
+                    const grossVal = parseBRL(value) * (isUSD ? usdRate : 1);
+                    if (grossVal <= 0) return null;
+
+                    const calcCostVal = (c: { value: number; value_type: string }) => {
+                      if (c.value_type === "percentage") return (grossVal * Number(c.value)) / 100;
+                      if (c.value_type === "usd") return Number(c.value) * usdRate;
+                      return Number(c.value);
+                    };
+
+                    const varTotal = varCostMode === "saved"
+                      ? availableVariableCosts.filter((c) => selectedVariableCostIds.includes(c.id)).reduce((s, c) => s + calcCostVal(c), 0)
+                      : manualVarCosts.reduce((s, c) => { const v = parseBRL(c.value); return s + (c.isUSD ? v * usdRate : v); }, 0);
+
+                    const fixedCostsForCalc =
+                      fixedCostMode === "none" ? [] :
+                      fixedCostMode === "custom" ? availableFixedCosts.filter((c) => selectedFixedCostIds.includes(c.id)) :
+                      availableFixedCosts;
+                    const fixedTotal = fixedCostsForCalc.reduce((s, c) => s + calcCostVal(c), 0);
+
+                    const totalDeducted = varTotal + fixedTotal;
+                    if (totalDeducted <= 0) return null;
+
+                    const netValue = grossVal - totalDeducted;
+                    return (
+                      <div className="border-t border-border pt-2 mt-1 space-y-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Receita bruta</span>
+                          <span>{formatCurrency(grossVal)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-destructive">
+                          <span>(-) Custos totais</span>
+                          <span>-{formatCurrency(totalDeducted)}</span>
+                        </div>
+                        <div className={`flex justify-between text-sm font-bold pt-1 border-t border-border ${netValue >= 0 ? "text-success" : "text-destructive"}`}>
+                          <span>Valor líquido estimado</span>
+                          <span>{formatCurrency(netValue)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
               <div className="border border-border rounded-lg p-4 space-y-4 bg-muted/20">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
@@ -662,6 +1033,7 @@ export default function TransactionsPage() {
       <TransactionDetailModal
         transaction={selectedTx}
         availableProducts={availableProducts}
+        usdRate={usdRate}
         onClose={() => setSelectedTx(null)}
         onChanged={fetchTransactions}
       />

@@ -297,10 +297,6 @@ export default function ProductsPage() {
         usdRate={usdRate}
         onClose={() => setProductModal({ open: false })}
         onSaved={fetchData}
-        onOpenCosts={() => {
-          setProductModal({ open: false, product: productModal.product });
-          setFixedCostsModal(true);
-        }}
       />
 
       <FixedCostsModal

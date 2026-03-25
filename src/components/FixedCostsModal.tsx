@@ -309,7 +309,7 @@ export default function FixedCostsModal({ open, fixedCosts, onClose, onChanged }
           <TabsContent value="variable" className="space-y-3 mt-4">
             <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-blue-700 dark:bg-blue-950/30 dark:border-blue-800 dark:text-blue-300">
               <Info size={15} className="mt-0.5 shrink-0" />
-              <span className="text-xs">Podem ser vinculados a produtos específicos</span>
+              <span className="text-xs">Aplicados pontualmente em cada transação de entrada</span>
             </div>
 
             {renderAddForm("variable")}

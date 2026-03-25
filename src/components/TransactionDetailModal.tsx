@@ -8,13 +8,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ExpandableInput } from "@/components/ui/expandable-input";
 import { toast } from "sonner";
-import { ArrowDownCircle, ArrowUpCircle, Trash2, Pencil, Calendar, Package, Check, ChevronsUpDown } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, Trash2, Pencil, Calendar, Package, Check, ChevronsUpDown, Bookmark } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import ClickUpDatePicker from "@/components/ui/clickup-datepicker";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
 import type { Transaction } from "@/pages/TransactionsPage";
+import { calcFixedCostForProduct } from "@/lib/product-icons";
 import { SafeDeleteDialog } from "@/components/ui/safe-delete-dialog";
 import { Download, FileText, Link as LinkIcon, File, Loader2 } from "lucide-react";
 import html2pdf from "html2pdf.js";
@@ -22,11 +23,12 @@ import html2pdf from "html2pdf.js";
 interface Props {
   transaction: Transaction | null;
   availableProducts: { id: string; name: string; selling_price: number }[];
+  usdRate?: number;
   onClose: () => void;
   onChanged: () => void;
 }
 
-export default function TransactionDetailModal({ transaction, availableProducts, onClose, onChanged }: Props) {
+export default function TransactionDetailModal({ transaction, availableProducts, usdRate = 5.50, onClose, onChanged }: Props) {
   const [editing, setEditing] = useState(false);
   const [editDesc, setEditDesc] = useState("");
   const [editValue, setEditValue] = useState("");
@@ -37,6 +39,9 @@ export default function TransactionDetailModal({ transaction, availableProducts,
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recurringDeleteOpen, setRecurringDeleteOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // IDs de custos pontuais (is_active=false) que estão sendo salvos ou já foram salvos nessa sessão
+  const [savingCostId, setSavingCostId] = useState<string | null>(null);
+  const [savedCostIds, setSavedCostIds] = useState<Set<string>>(new Set());
 
   if (!transaction) return null;
   const isIncome = transaction.type === "income";
@@ -228,7 +233,7 @@ export default function TransactionDetailModal({ transaction, availableProducts,
   };
 
   return (
-    <Dialog open={!!transaction} onOpenChange={(open) => { if (!open) { onClose(); setEditing(false); } }}>
+    <Dialog open={!!transaction} onOpenChange={(open) => { if (!open) { onClose(); setEditing(false); setSavedCostIds(new Set()); } }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>{editing ? "Editar Operação" : "Detalhes da Operação"}</DialogTitle>
@@ -263,6 +268,109 @@ export default function TransactionDetailModal({ transaction, availableProducts,
                   </span>
                 </div>
               )}
+              {/* Custos vinculados (só para entradas) */}
+              {isIncome && (() => {
+                const varCosts = transaction.transaction_variable_costs || [];
+                const fixedCosts = transaction.transaction_fixed_costs || [];
+                const ignoreFixed = transaction.ignore_fixed_costs;
+                const hasAnyCosts = varCosts.length > 0 || fixedCosts.length > 0 || ignoreFixed;
+                if (!hasAnyCosts) return null;
+
+                const varTotal = varCosts.reduce((sum, r) => {
+                  const c = r.fixed_costs;
+                  if (!c) return sum;
+                  if (c.value_type === "percentage") return sum + (Number(transaction.value) * Number(c.value)) / 100;
+                  if (c.value_type === "usd") return sum + Number(c.value) * usdRate;
+                  return sum + Number(c.value);
+                }, 0);
+
+                const fixedTotal = ignoreFixed ? 0 : fixedCosts.reduce((sum, r) => {
+                  const c = r.fixed_costs;
+                  if (!c) return sum;
+                  if (c.value_type === "percentage") return sum + (Number(transaction.value) * Number(c.value)) / 100;
+                  if (c.value_type === "usd") return sum + Number(c.value) * usdRate;
+                  return sum + Number(c.value);
+                }, 0);
+
+                const totalCosts = varTotal + fixedTotal;
+                const netProfit = Number(transaction.value) - totalCosts;
+
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Custos desta entrada</p>
+                    {varCosts.length > 0 && (
+                      <div className="bg-muted/40 rounded-lg px-3 py-2 space-y-1.5">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground">Custos Variáveis</p>
+                        {varCosts.map((r) => {
+                          if (!r.fixed_costs) return null;
+                          const c = r.fixed_costs;
+                          const isPontual = !c.is_active;
+                          const isSaved = savedCostIds.has(c.id);
+                          const isSaving = savingCostId === c.id;
+
+                          const handleSaveCost = async () => {
+                            setSavingCostId(c.id);
+                            await supabase.from("fixed_costs").update({ is_active: true }).eq("id", c.id);
+                            setSavedCostIds((prev) => new Set(prev).add(c.id));
+                            setSavingCostId(null);
+                          };
+
+                          return (
+                            <div key={r.variable_cost_id} className="flex items-center justify-between gap-2 text-sm">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-foreground truncate">{c.name}</span>
+                                {isPontual && !isSaved && (
+                                  <button
+                                    type="button"
+                                    onClick={handleSaveCost}
+                                    disabled={isSaving}
+                                    title="Salvar para reutilizar em outras transações"
+                                    className="shrink-0 flex items-center gap-1 text-[10px] text-muted-foreground hover:text-brand-primary border border-border hover:border-brand-primary/40 rounded px-1.5 py-0.5 transition-colors disabled:opacity-50"
+                                  >
+                                    <Bookmark size={9} />
+                                    {isSaving ? "Salvando…" : "Salvar"}
+                                  </button>
+                                )}
+                                {isSaved && (
+                                  <span className="shrink-0 flex items-center gap-1 text-[10px] text-success">
+                                    <Check size={9} /> Salvo
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-medium text-destructive shrink-0">
+                                -{c.value_type === "percentage" ? `${Number(c.value)}%` : formatCurrency(c.value_type === "usd" ? Number(c.value) * usdRate : Number(c.value))}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {!ignoreFixed && fixedCosts.length > 0 && (
+                      <div className="bg-muted/40 rounded-lg px-3 py-2 space-y-1">
+                        <p className="text-[10px] font-bold uppercase text-muted-foreground">Custos Fixos Selecionados</p>
+                        {fixedCosts.map((r) => r.fixed_costs && (
+                          <div key={r.fixed_cost_id} className="flex justify-between text-sm">
+                            <span className="text-foreground">{r.fixed_costs.name}</span>
+                            <span className="font-medium text-destructive">
+                              -{r.fixed_costs.value_type === "percentage" ? `${Number(r.fixed_costs.value)}%` : formatCurrency(r.fixed_costs.value_type === "usd" ? Number(r.fixed_costs.value) * usdRate : Number(r.fixed_costs.value))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {ignoreFixed && (
+                      <p className="text-xs text-muted-foreground italic">Custos fixos ignorados nesta transação</p>
+                    )}
+                    {totalCosts > 0 && (
+                      <div className={`rounded-lg px-3 py-2 flex justify-between items-center ${netProfit >= 0 ? "bg-success/10" : "bg-destructive/10"}`}>
+                        <span className="text-xs font-bold">Lucro estimado</span>
+                        <span className={`font-bold ${netProfit >= 0 ? "text-success" : "text-destructive"}`}>{formatCurrency(netProfit)}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* @ts-ignore */}
               {transaction.attachment_url && (
                 <div>

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Lightbulb, Sparkles, Check } from "lucide-react";
-import { PRODUCT_ICONS, ICON_MAP, setProductIcon, getProductIconName, maskBRL, parseBRL, calcFixedCostForProduct, calcVariableCostForProduct } from "@/lib/product-icons";
+import { PRODUCT_ICONS, ICON_MAP, setProductIcon, getProductIconName, maskBRL, parseBRL, calcFixedCostForProduct } from "@/lib/product-icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ExpandableInput } from "@/components/ui/expandable-input";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,6 @@ interface Props {
   usdRate?: number;
   onClose: () => void;
   onSaved: () => void;
-  onOpenCosts?: () => void;
 }
 
 function toMask(value: number | undefined): string {
@@ -30,7 +29,7 @@ function toMask(value: number | undefined): string {
   return maskBRL(String(Math.round(value * 100)));
 }
 
-export default function ProductModal({ open, product, entryType = "product", fixedCosts, usdRate = 1, onClose, onSaved, onOpenCosts }: Props) {
+export default function ProductModal({ open, product, entryType = "product", fixedCosts, usdRate = 1, onClose, onSaved }: Props) {
   const { user } = useAuth();
   const [name, setName] = useState(product?.name || "");
   const [description, setDescription] = useState(product?.description || "");
@@ -41,12 +40,9 @@ export default function ProductModal({ open, product, entryType = "product", fix
   const [saving, setSaving] = useState(false);
   const [ignoreFixedCosts, setIgnoreFixedCosts] = useState(product?.ignore_fixed_costs ?? false);
   const [localEntryType, setLocalEntryType] = useState<"product" | "service">(product?.entry_type || entryType);
-  const [variableCosts, setVariableCosts] = useState<FixedCost[]>([]);
-  const [selectedVariableCostIds, setSelectedVariableCostIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
-
     setName(product?.name || "");
     setDescription(product?.description || "");
     setCostPrice(toMask(product?.cost_price));
@@ -55,31 +51,7 @@ export default function ProductModal({ open, product, entryType = "product", fix
     setIconPickerOpen(false);
     setLocalEntryType(product?.entry_type || entryType);
     setIgnoreFixedCosts(product?.ignore_fixed_costs ?? false);
-    setSelectedVariableCostIds([]);
-
-    const loadData = async () => {
-      if (!user) return;
-
-      const { data: vcData } = await supabase
-        .from("fixed_costs")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("type", "variable");
-
-      setVariableCosts(vcData || []);
-
-      if (product) {
-        const { data: linked } = await supabase
-          .from("product_variable_costs")
-          .select("variable_cost_id")
-          .eq("product_id", product.id);
-
-        setSelectedVariableCostIds((linked || []).map((r: { variable_cost_id: string }) => r.variable_cost_id));
-      }
-    };
-
-    loadData();
-  }, [open, product, user]);
+  }, [open, product, entryType]);
 
   const cp = parseBRL(costPrice);
   const sp = parseBRL(sellingPrice);
@@ -93,25 +65,12 @@ export default function ProductModal({ open, product, entryType = "product", fix
     .filter(c => c.is_active && (!c.type || c.type === "fixed") && c.value_type === "percentage")
     .reduce((s, c) => s + Number(c.value), 0);
 
-  // Custos variáveis selecionados (R$ + % sobre sp)
-  const selectedVarCosts = variableCosts.filter((c) => selectedVariableCostIds.includes(c.id));
-  const selectedVarTotal = calcVariableCostForProduct(selectedVarCosts, sp, cp, usdRate);
-  const selectedVarTotalBRL = selectedVarCosts
-    .filter(c => c.value_type !== "percentage")
-    .reduce((s, c) => s + (c.value_type === "usd" ? Number(c.value) * usdRate : Number(c.value)), 0);
-
   // Sugerido usa apenas R$ fixos (sem % para evitar circularidade)
-  const suggestedPrice = (cp + fixedCostBRL + selectedVarTotalBRL) * 2;
-  const profit = sp - selectedVarTotal - effectiveFixedCost - cp;
+  const suggestedPrice = (cp + fixedCostBRL) * 2;
+  const profit = sp - effectiveFixedCost - cp;
 
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) onClose();
-  };
-
-  const toggleVariableCost = (id: string) => {
-    setSelectedVariableCostIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
   };
 
   const handleSave = async () => {
@@ -126,13 +85,10 @@ export default function ProductModal({ open, product, entryType = "product", fix
       name: name.trim(),
       description: description.trim() || null,
       cost_price: cp,
-      variable_cost: selectedVarTotal,
       selling_price: sp,
       ignore_fixed_costs: ignoreFixedCosts,
       entry_type: localEntryType,
     };
-
-    let productId: string | null = product?.id ?? null;
 
     if (product) {
       const { error } = await supabase.from("products").update(data).eq("id", product.id);
@@ -149,18 +105,7 @@ export default function ProductModal({ open, product, entryType = "product", fix
         toast.error("Erro ao salvar produto");
         return;
       }
-      productId = saved.id;
       setProductIcon(saved.id, selectedIcon);
-    }
-
-    if (productId) {
-      await supabase.from("product_variable_costs").delete().eq("product_id", productId);
-
-      if (selectedVariableCostIds.length > 0) {
-        await supabase.from("product_variable_costs").insert(
-          selectedVariableCostIds.map((vcId) => ({ product_id: productId, variable_cost_id: vcId }))
-        );
-      }
     }
 
     setSaving(false);
@@ -287,65 +232,6 @@ export default function ProductModal({ open, product, entryType = "product", fix
               </div>
             )}
 
-            {/* Custos variáveis vinculados */}
-            <div className="border border-border rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-muted-foreground">Custos Variáveis</p>
-                {onOpenCosts && (
-                  <Button type="button" variant="ghost" size="sm" onClick={onOpenCosts} className="h-6 text-xs text-brand-hover hover:text-brand-primary px-2">
-                    + Criar
-                  </Button>
-                )}
-              </div>
-
-              {variableCosts.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic px-1">Nenhum custo cadastrado.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {variableCosts.map((vc) => {
-                    const checked = selectedVariableCostIds.includes(vc.id);
-                    return (
-                      <button
-                        key={vc.id}
-                        type="button"
-                        onClick={() => toggleVariableCost(vc.id)}
-                        className="w-full flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-brand-light transition-colors text-left"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={cn(
-                              "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
-                              checked
-                                ? "bg-brand-primary border-brand-primary"
-                                : "border-muted-foreground/40 bg-background"
-                            )}
-                          >
-                            {checked && <Check size={10} className="text-white" strokeWidth={3} />}
-                          </div>
-                          <span className="text-sm">{vc.name}</span>
-                        </div>
-                        <span className="text-sm text-muted-foreground shrink-0">
-                          {vc.value_type === "percentage" ? (
-                            <span className="inline-flex items-center text-xs font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded-md">
-                              {Number(vc.value)}%
-                            </span>
-                          ) : (
-                            formatCurrency(vc.value_type === "usd" ? Number(vc.value) * usdRate : Number(vc.value))
-                          )}
-                        </span>                    </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {selectedVariableCostIds.length > 0 && (
-                <div className="flex items-center justify-between pt-1 border-t border-border">
-                  <span className="text-xs text-muted-foreground">Subtotal selecionado</span>
-                  <span className="text-xs font-semibold text-brand-hover">{formatCurrency(selectedVarTotal)}</span>
-                </div>
-              )}
-            </div>
-
             {/* Custo fixo (automático) */}
             <div className="bg-muted border border-border rounded-lg p-3">
               <p className="text-xs text-muted-foreground mb-1">Custo fixo total (automático)</p>
@@ -418,7 +304,7 @@ export default function ProductModal({ open, product, entryType = "product", fix
               </p>
               {sp > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  (Preço {formatCurrency(sp)} - Custos {formatCurrency(effectiveFixedCost + cp + selectedVarTotal)})
+                  (Preço {formatCurrency(sp)} - Custos {formatCurrency(effectiveFixedCost + cp)})
                 </p>
               )}
             </div>
