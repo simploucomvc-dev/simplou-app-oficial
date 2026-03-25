@@ -260,14 +260,29 @@ export default function TransactionDetailModal({ transaction, availableProducts,
                 <p className="text-xs text-muted-foreground">Data</p>
                 <p className="font-semibold">{formatDateLong(transaction.date)}</p>
               </div>
-              {transaction.products?.name && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Produto vinculado</p>
-                  <span className="inline-flex items-center gap-1.5 text-sm font-semibold bg-brand-light text-brand-hover px-3 py-1 rounded-full mt-1">
-                    <Package size={13} /> {transaction.products.name}
-                  </span>
-                </div>
-              )}
+              {(() => {
+                const linkedProducts = transaction.transaction_products?.filter(tp => tp.products) ?? [];
+                // fallback para o campo legado product_id caso transaction_products esteja vazio
+                const legacyProduct = linkedProducts.length === 0 && transaction.products?.name ? [transaction.products] : [];
+                const allProducts = linkedProducts.length > 0
+                  ? linkedProducts.map(tp => tp.products!)
+                  : legacyProduct;
+                if (allProducts.length === 0) return null;
+                return (
+                  <div>
+                    <p className="text-xs text-muted-foreground">
+                      {allProducts.length === 1 ? "Produto vinculado" : "Produtos vinculados"}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {allProducts.map((prod) => (
+                        <span key={prod.id} className="inline-flex items-center gap-1.5 text-sm font-semibold bg-brand-light text-brand-hover px-3 py-1 rounded-full">
+                          <Package size={13} /> {prod.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {/* Custos vinculados (só para entradas) */}
               {isIncome && (() => {
                 const varCosts = transaction.transaction_variable_costs || [];

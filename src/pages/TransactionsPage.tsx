@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, ArrowDownCircle, ArrowUpCircle, Wallet, ClipboardList, Plus, Calendar, Search, X, Package, Check, ChevronsUpDown, RefreshCw, BookmarkPlus } from "lucide-react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Drawer } from "vaul";
 import { ExpandableInput } from "@/components/ui/expandable-input";
 import { cn } from "@/lib/utils";
 import TransactionDetailModal from "@/components/TransactionDetailModal";
@@ -39,6 +40,7 @@ export interface Transaction {
   date: string;
   product_id?: string | null;
   products?: { id: string; name: string } | null;
+  transaction_products?: { product_id: string; products: { id: string; name: string } | null }[];
   attachment_url?: string | null;
   ignore_fixed_costs?: boolean;
   transaction_variable_costs?: VariableCostRef[];
@@ -62,13 +64,18 @@ export default function TransactionsPage() {
   const [futureModalOpen, setFutureModalOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [availableProducts, setAvailableProducts] = useState<{ id: string; name: string; selling_price: number }[]>([]);
-  const [linkedProductId, setLinkedProductId] = useState("");
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [filterType, setFilterType] = useState<"all" | "income" | "expense">("all");
   const [filterText, setFilterText] = useState("");
   const [isRecurrent, setIsRecurrent] = useState(false);
   const [recurrentMonths, setRecurrentMonths] = useState("6");
   const [productPopoverOpen, setProductPopoverOpen] = useState(false);
-  const isMobile = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+  const [productDrawerOpen, setProductDrawerOpen] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [varCostDrawerOpen, setVarCostDrawerOpen] = useState(false);
+  const [varCostSearch, setVarCostSearch] = useState("");
+  const [varCostPopoverOpen, setVarCostPopoverOpen] = useState(false);
+  const isTouchDevice = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [isUSD, setIsUSD] = useState(false);
   const [usdRate, setUsdRate] = useState(5.50);
@@ -116,7 +123,7 @@ export default function TransactionsPage() {
     if (!user) return;
     const { data } = await supabase
       .from("transactions")
-      .select("*, products(id, name), transaction_variable_costs(variable_cost_id, fixed_costs(id, name, value, value_type, percentage_base, is_active)), transaction_fixed_costs(fixed_cost_id, fixed_costs(id, name, value, value_type, percentage_base))")
+      .select("*, products(id, name), transaction_products(product_id, products(id, name)), transaction_variable_costs(variable_cost_id, fixed_costs(id, name, value, value_type, percentage_base, is_active)), transaction_fixed_costs(fixed_cost_id, fixed_costs(id, name, value, value_type, percentage_base))")
       .eq("user_id", user.id)
       .order("date", { ascending: false });
     setTransactions(data || []);
@@ -156,7 +163,7 @@ export default function TransactionsPage() {
     setDescription("");
     setValue("");
     setSelectedDate(new Date());
-    setLinkedProductId("");
+    setSelectedProducts([]);
     setIsRecurrent(false);
     setRecurrentMonths("6");
     setAttachmentFile(null);
@@ -177,15 +184,24 @@ export default function TransactionsPage() {
     }
   }, [searchParams]);
 
-  const handleProductLink = (productId: string) => {
-    setLinkedProductId(productId);
-    if (productId) {
-      const prod = availableProducts.find((p) => p.id === productId);
-      if (prod?.selling_price) {
-        setIsUSD(false);
-        setValue(maskBRL(String(Math.round(prod.selling_price * 100))));
-      }
+  const toggleProduct = (productId: string) => {
+    if (!productId) {
+      setSelectedProducts([]);
+      return;
     }
+    setSelectedProducts((prev) => {
+      const isSelected = prev.includes(productId);
+      if (isSelected) return prev.filter((id) => id !== productId);
+      // Auto-preenche o preço apenas ao selecionar o primeiro produto
+      if (prev.length === 0) {
+        const prod = availableProducts.find((p) => p.id === productId);
+        if (prod?.selling_price) {
+          setIsUSD(false);
+          setValue(maskBRL(String(Math.round(prod.selling_price * 100))));
+        }
+      }
+      return [...prev, productId];
+    });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -210,7 +226,6 @@ export default function TransactionsPage() {
         description: currentDesc,
         value: val,
         date: dateStr,
-        product_id: linkedProductId || null,
         ignore_fixed_costs: type === "income" ? fixedCostMode === "none" : false,
       });
     }
@@ -303,6 +318,15 @@ export default function TransactionsPage() {
           }
         }
       }
+    }
+
+    // Vincular produtos selecionados
+    if (insertedData && insertedData.length > 0 && selectedProducts.length > 0) {
+      await supabase.from("transaction_products").insert(
+        insertedData.flatMap((tx) =>
+          selectedProducts.map((pid) => ({ transaction_id: tx.id, product_id: pid }))
+        )
+      );
     }
 
     if (attachmentFile && insertedData && insertedData.length > 0) {
@@ -557,78 +581,174 @@ export default function TransactionsPage() {
                 <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
                   Produto vinculado <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
                 </Label>
-                {isMobile ? (
-                  <select
-                    value={linkedProductId}
-                    onChange={(e) => handleProductLink(e.target.value)}
-                    className="w-full h-11 rounded-md border border-input bg-background px-3 text-sm"
+                {isTouchDevice ? (
+                  /* ── MOBILE / TABLET: Bottom Sheet com multi-seleção ── */
+                  <Drawer.Root
+                    open={productDrawerOpen}
+                    onOpenChange={(open) => {
+                      setProductDrawerOpen(open);
+                      if (!open) setProductSearch("");
+                    }}
                   >
-                    <option value="">Nenhum produto selecionado</option>
-                    {availableProducts.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <Popover open={productPopoverOpen} onOpenChange={setProductPopoverOpen}>
-                    <PopoverTrigger asChild>
+                    {/* Badges dos produtos selecionados */}
+                    {selectedProducts.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {selectedProducts.map((pid) => {
+                          const prod = availableProducts.find((p) => p.id === pid);
+                          return prod ? (
+                            <span key={pid} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2.5 py-1 rounded-full">
+                              {prod.name}
+                              <button type="button" onClick={() => toggleProduct(pid)} className="ml-0.5">
+                                <X size={11} />
+                              </button>
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                    <Drawer.Trigger asChild>
                       <Button
                         variant="outline"
-                        role="combobox"
-                        aria-expanded={productPopoverOpen}
-                        className="w-full justify-between h-11 font-normal bg-background"
+                        className="w-full justify-between h-9 font-normal bg-background text-sm"
                       >
-                        {linkedProductId
-                          ? availableProducts.find((p) => p.id === linkedProductId)?.name
-                          : "Nenhum produto selecionado"}
+                        {selectedProducts.length === 0 ? "Nenhum produto selecionado" : `+ Adicionar produto`}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-full p-0" align="start" style={{ width: 'var(--radix-popover-trigger-width)' }}>
-                      <Command>
-                        <CommandInput placeholder="Buscar produto..." className="h-9" />
-                        <CommandList>
-                          <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
-                          <CommandGroup>
-                            <CommandItem
-                              value="none"
-                              onSelect={() => {
-                                handleProductLink("");
-                                setProductPopoverOpen(false);
-                              }}
-                            >
-                              Nenhum produto
-                              <Check
-                                className={cn(
-                                  "ml-auto h-4 w-4",
-                                  !linkedProductId ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                            </CommandItem>
-                            {availableProducts.map((p) => (
-                              <CommandItem
-                                key={p.id}
-                                value={p.name}
-                                onSelect={() => {
-                                  handleProductLink(p.id);
-                                  setProductPopoverOpen(false);
-                                }}
-                              >
-                                {p.name}
-                                <Check
+                    </Drawer.Trigger>
+                    <Drawer.Portal>
+                      <Drawer.Overlay className="fixed inset-0 bg-black/45 z-50" />
+                      <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl outline-none">
+                        <div className="flex justify-center pt-3 pb-1">
+                          <div className="w-9 h-1 rounded-full bg-gray-300" />
+                        </div>
+                        <div className="flex justify-between items-center px-4 py-3">
+                          <span className="text-base font-medium">Selecionar produtos</span>
+                          <Drawer.Close asChild>
+                            <button className="text-gray-400 p-1">
+                              <X size={20} />
+                            </button>
+                          </Drawer.Close>
+                        </div>
+                        <div className="px-4 pb-3">
+                          <input
+                            type="text"
+                            placeholder="Buscar produto..."
+                            value={productSearch}
+                            onChange={(e) => setProductSearch(e.target.value)}
+                            autoFocus={false}
+                            tabIndex={-1}
+                            className="w-full bg-gray-100 rounded-xl px-3 py-2 text-sm outline-none"
+                          />
+                        </div>
+                        <div
+                          className="overflow-y-scroll"
+                          style={{
+                            maxHeight: "45vh",
+                            WebkitOverflowScrolling: "touch",
+                            touchAction: "pan-y",
+                            overscrollBehavior: "contain",
+                          }}
+                        >
+                          {availableProducts
+                            .filter((p) => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                            .map((p) => {
+                              const isSelected = selectedProducts.includes(p.id);
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
                                   className={cn(
-                                    "ml-auto h-4 w-4",
-                                    linkedProductId === p.id ? "opacity-100" : "opacity-0"
+                                    "w-full flex items-center justify-between px-4 py-3 text-sm border-b border-gray-100",
+                                    isSelected && "bg-blue-50"
                                   )}
-                                />
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                                  onClick={() => toggleProduct(p.id)}
+                                >
+                                  <span>{p.name}</span>
+                                  <div className={cn(
+                                    "w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0",
+                                    isSelected ? "bg-blue-500 border-blue-500" : "border-gray-300"
+                                  )}>
+                                    {isSelected && <Check size={12} className="text-white" />}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                        </div>
+                        {/* Botão Confirmar fixo no rodapé */}
+                        <div className="p-4 border-t border-gray-100">
+                          <Drawer.Close asChild>
+                            <Button className="w-full">
+                              Confirmar{selectedProducts.length > 0 ? ` (${selectedProducts.length})` : ""}
+                            </Button>
+                          </Drawer.Close>
+                        </div>
+                      </Drawer.Content>
+                    </Drawer.Portal>
+                  </Drawer.Root>
+                ) : (
+                  /* ── DESKTOP: Badges + Popover multi-seleção ── */
+                  <>
+                    {selectedProducts.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {selectedProducts.map((pid) => {
+                          const prod = availableProducts.find((p) => p.id === pid);
+                          return prod ? (
+                            <span key={pid} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2.5 py-1 rounded-full">
+                              {prod.name}
+                              <button type="button" onClick={() => toggleProduct(pid)} className="ml-0.5">
+                                <X size={11} />
+                              </button>
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                    <Popover open={productPopoverOpen} onOpenChange={setProductPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={productPopoverOpen}
+                          className="w-full justify-between h-9 font-normal bg-background text-sm"
+                        >
+                          {selectedProducts.length === 0 ? "Nenhum produto selecionado" : "+ Adicionar produto"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                        <Command>
+                          <CommandInput placeholder="Buscar produto..." className="h-9" />
+                          <CommandList>
+                            <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+                            <CommandGroup>
+                              {availableProducts.map((p) => (
+                                <CommandItem
+                                  key={p.id}
+                                  value={p.name}
+                                  onSelect={() => toggleProduct(p.id)}
+                                >
+                                  {p.name}
+                                  <Check
+                                    className={cn(
+                                      "ml-auto h-4 w-4",
+                                      selectedProducts.includes(p.id) ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                        <div className="p-2 border-t">
+                          <Button size="sm" className="w-full" onClick={() => setProductPopoverOpen(false)}>
+                            Confirmar{selectedProducts.length > 0 ? ` (${selectedProducts.length})` : ""}
+                          </Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </>
                 )}
-                {linkedProductId && (
+                {selectedProducts.length > 0 && selectedProducts.length === 1 && (
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     Preço do produto preenchido automaticamente (editável)
                   </p>
@@ -767,39 +887,157 @@ export default function TransactionsPage() {
                     {varCostMode === "saved" ? (
                       availableVariableCosts.length === 0 ? (
                         <p className="text-xs text-muted-foreground italic px-1 py-2">Nenhum custo variável cadastrado. Use o modo Manual ou cadastre em Custos.</p>
-                      ) : (
-                        <div className="space-y-1">
-                          {availableVariableCosts.map((vc) => {
-                            const checked = selectedVariableCostIds.includes(vc.id);
-                            return (
-                              <button
-                                key={vc.id}
-                                type="button"
-                                onClick={() => setSelectedVariableCostIds((prev) =>
-                                  prev.includes(vc.id) ? prev.filter((x) => x !== vc.id) : [...prev, vc.id]
-                                )}
-                                className="w-full flex items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-accent transition-colors text-left"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className={cn("w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors", checked ? "bg-brand-primary border-brand-primary" : "border-muted-foreground/40 bg-background")}>
-                                    {checked && <Check size={10} className="text-white" strokeWidth={3} />}
-                                  </div>
-                                  <span className="text-sm">{vc.name}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground shrink-0">
-                                  {vc.value_type === "percentage"
-                                    ? `${Number(vc.value)}%`
-                                    : vc.value_type === "usd"
-                                    ? `US$ ${Number(vc.value).toFixed(2)} ≈ ${formatCurrency(Number(vc.value) * usdRate)}`
-                                    : formatCurrency(Number(vc.value))}
-                                </span>
-                              </button>
-                            );
-                          })}
+                      ) : isTouchDevice ? (
+                        /* ── MOBILE / TABLET: Bottom Sheet ── */
+                        <Drawer.Root
+                          open={varCostDrawerOpen}
+                          onOpenChange={(open) => {
+                            setVarCostDrawerOpen(open);
+                            if (!open) setVarCostSearch("");
+                          }}
+                        >
+                          {/* Badges dos custos selecionados */}
                           {selectedVariableCostIds.length > 0 && (
-                            <p className="text-[10px] text-muted-foreground italic px-1">Você pode selecionar mais de um</p>
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {selectedVariableCostIds.map((id) => {
+                                const vc = availableVariableCosts.find((c) => c.id === id);
+                                if (!vc) return null;
+                                const label = vc.value_type === "percentage" ? `${Number(vc.value)}%` : vc.value_type === "usd" ? `US$${Number(vc.value)}` : formatCurrency(Number(vc.value));
+                                return (
+                                  <span key={id} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2.5 py-1 rounded-full">
+                                    {vc.name} {label}
+                                    <button type="button" onClick={() => setSelectedVariableCostIds((p) => p.filter((x) => x !== id))} className="ml-0.5">
+                                      <X size={11} />
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                            </div>
                           )}
-                        </div>
+                          <Drawer.Trigger asChild>
+                            <Button variant="outline" className="w-full justify-between h-9 font-normal bg-background text-sm">
+                              {selectedVariableCostIds.length === 0 ? "Nenhum custo selecionado" : "+ Adicionar custo"}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </Drawer.Trigger>
+                          <Drawer.Portal>
+                            <Drawer.Overlay className="fixed inset-0 bg-black/45 z-50" />
+                            <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl outline-none">
+                              <div className="flex justify-center pt-3 pb-1">
+                                <div className="w-9 h-1 rounded-full bg-gray-300" />
+                              </div>
+                              <div className="flex justify-between items-center px-4 py-3">
+                                <span className="text-base font-medium">Selecionar custos variáveis</span>
+                                <Drawer.Close asChild>
+                                  <button className="text-gray-400 p-1"><X size={20} /></button>
+                                </Drawer.Close>
+                              </div>
+                              <div className="px-4 pb-3">
+                                <input
+                                  type="text"
+                                  placeholder="Buscar custo..."
+                                  value={varCostSearch}
+                                  onChange={(e) => setVarCostSearch(e.target.value)}
+                                  autoFocus={false}
+                                  tabIndex={-1}
+                                  className="w-full bg-gray-100 rounded-xl px-3 py-2 text-sm outline-none"
+                                />
+                              </div>
+                              <div
+                                className="overflow-y-scroll"
+                                style={{ maxHeight: "45vh", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overscrollBehavior: "contain" }}
+                              >
+                                {availableVariableCosts
+                                  .filter((vc) => vc.name.toLowerCase().includes(varCostSearch.toLowerCase()))
+                                  .map((vc) => {
+                                    const isSelected = selectedVariableCostIds.includes(vc.id);
+                                    const valueLabel = vc.value_type === "percentage" ? `${Number(vc.value)}%` : vc.value_type === "usd" ? `US$ ${Number(vc.value).toFixed(2)}` : formatCurrency(Number(vc.value));
+                                    return (
+                                      <button
+                                        key={vc.id}
+                                        type="button"
+                                        className={cn("w-full flex items-center justify-between px-4 py-3 text-sm border-b border-gray-100", isSelected && "bg-blue-50")}
+                                        onClick={() => setSelectedVariableCostIds((p) => p.includes(vc.id) ? p.filter((x) => x !== vc.id) : [...p, vc.id])}
+                                      >
+                                        <span>{vc.name}</span>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-gray-400">{valueLabel}</span>
+                                          <div className={cn("w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0", isSelected ? "bg-blue-500 border-blue-500" : "border-gray-300")}>
+                                            {isSelected && <Check size={12} className="text-white" />}
+                                          </div>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                              </div>
+                              <div className="p-4 border-t border-gray-100">
+                                <Drawer.Close asChild>
+                                  <Button className="w-full">
+                                    Confirmar{selectedVariableCostIds.length > 0 ? ` (${selectedVariableCostIds.length})` : ""}
+                                  </Button>
+                                </Drawer.Close>
+                              </div>
+                            </Drawer.Content>
+                          </Drawer.Portal>
+                        </Drawer.Root>
+                      ) : (
+                        /* ── DESKTOP: Badges + Popover multi-select ── */
+                        <>
+                          {selectedVariableCostIds.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              {selectedVariableCostIds.map((id) => {
+                                const vc = availableVariableCosts.find((c) => c.id === id);
+                                if (!vc) return null;
+                                const label = vc.value_type === "percentage" ? `${Number(vc.value)}%` : vc.value_type === "usd" ? `US$${Number(vc.value)}` : formatCurrency(Number(vc.value));
+                                return (
+                                  <span key={id} className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs px-2.5 py-1 rounded-full">
+                                    {vc.name} {label}
+                                    <button type="button" onClick={() => setSelectedVariableCostIds((p) => p.filter((x) => x !== id))} className="ml-0.5">
+                                      <X size={11} />
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <Popover open={varCostPopoverOpen} onOpenChange={setVarCostPopoverOpen}>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" role="combobox" className="w-full justify-between h-9 font-normal bg-background text-sm">
+                                {selectedVariableCostIds.length === 0 ? "Nenhum custo selecionado" : "+ Adicionar custo"}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0" align="start" style={{ width: "var(--radix-popover-trigger-width)" }}>
+                              <Command>
+                                <CommandInput placeholder="Buscar custo..." className="h-9" />
+                                <CommandList>
+                                  <CommandEmpty>Nenhum custo encontrado.</CommandEmpty>
+                                  <CommandGroup>
+                                    {availableVariableCosts.map((vc) => {
+                                      const valueLabel = vc.value_type === "percentage" ? `${Number(vc.value)}%` : vc.value_type === "usd" ? `US$${Number(vc.value)}` : formatCurrency(Number(vc.value));
+                                      return (
+                                        <CommandItem
+                                          key={vc.id}
+                                          value={vc.name}
+                                          onSelect={() => setSelectedVariableCostIds((p) => p.includes(vc.id) ? p.filter((x) => x !== vc.id) : [...p, vc.id])}
+                                        >
+                                          <span className="flex-1">{vc.name}</span>
+                                          <span className="text-xs text-muted-foreground mr-2">{valueLabel}</span>
+                                          <Check className={cn("h-4 w-4", selectedVariableCostIds.includes(vc.id) ? "opacity-100" : "opacity-0")} />
+                                        </CommandItem>
+                                      );
+                                    })}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                              <div className="p-2 border-t">
+                                <Button size="sm" className="w-full" onClick={() => setVarCostPopoverOpen(false)}>
+                                  Confirmar{selectedVariableCostIds.length > 0 ? ` (${selectedVariableCostIds.length})` : ""}
+                                </Button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </>
                       )
                     ) : (
                       <div className="space-y-2">
