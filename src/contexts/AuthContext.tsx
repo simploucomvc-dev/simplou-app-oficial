@@ -12,6 +12,10 @@ export interface UserProfile {
   cnpj?: string;
   business_type?: string;
   subscription_status?: string;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  trial_ends_at?: string;
+  subscription_ends_at?: string;
   profile_photo_url?: string;
   company_logo_url?: string;
   role: UserRole;
@@ -33,12 +37,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function checkTrialExpired(profile: UserProfile | null): boolean {
+function checkIsBlocked(profile: UserProfile | null): boolean {
   if (!profile) return false;
   if (profile.role === "super_admin" || profile.role === "partner") return false;
+  const status = profile.subscription_status;
+  if (status === "active") return false;
+  if (status === "trial" && profile.trial_ends_at) {
+    return new Date(profile.trial_ends_at) < new Date();
+  }
+  if (status === "canceled" || status === "past_due") return true;
+  // fallback: trial sem data definida, usa created_at
   const created = new Date(profile.created_at);
-  const now = new Date();
-  const diffDays = (now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24);
+  const diffDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
   return diffDays > 7;
 }
 
@@ -129,7 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(null);
   };
 
-  const isTrialExpired = checkTrialExpired(profile);
+  const isTrialExpired = checkIsBlocked(profile);
 
   return (
     <AuthContext.Provider

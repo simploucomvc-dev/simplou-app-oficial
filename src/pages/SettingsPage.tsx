@@ -326,14 +326,48 @@ export default function SettingsPage() {
     }
   };
 
+  const [loadingCheckout, setLoadingCheckout] = useState(false);
+  const [loadingPortal, setLoadingPortal] = useState(false);
+
+  const handleSubscribe = async () => {
+    setLoadingCheckout(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke("create-checkout-session", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (error) throw error;
+      if (data?.url) window.location.href = data.url;
+    } catch {
+      toast.error("Erro ao iniciar pagamento. Tente novamente.");
+    } finally {
+      setLoadingCheckout(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    setLoadingPortal(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke("create-portal-session", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (error) throw error;
+      if (data?.url) window.location.href = data.url;
+    } catch {
+      toast.error("Erro ao abrir portal de assinatura. Tente novamente.");
+    } finally {
+      setLoadingPortal(false);
+    }
+  };
+
   const getTrialTimeRemaining = () => {
     if (!profile) return null;
-    const created = new Date(profile.created_at);
-    const trialEnd = new Date(created.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const now = new Date();
-    const diff = trialEnd.getTime() - now.getTime();
+    const trialEnd = profile.trial_ends_at
+      ? new Date(profile.trial_ends_at)
+      : new Date(new Date(profile.created_at).getTime() + 7 * 24 * 60 * 60 * 1000);
+    const diff = trialEnd.getTime() - Date.now();
     if (diff <= 0) return "Expirado";
-
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     return `${days} dias e ${hours} horas restantes`;
@@ -668,19 +702,50 @@ export default function SettingsPage() {
       {/* Subscription */}
       <section className="bg-card border border-border rounded-2xl p-6 space-y-4 shadow-sm">
         <h2 className="text-base font-bold flex items-center gap-2 pb-2 border-b border-border"><CreditCard size={16} /> Assinatura & Pagamentos</h2>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Plano atual</p>
             <p className="text-xl font-bold mt-0.5">
-              {profile?.role === "super_admin" ? "Administrador" : profile?.role === "partner" ? "Parceiro" : "Período de Teste"}
+              {profile?.role === "super_admin"
+                ? "Administrador"
+                : profile?.role === "partner"
+                ? "Parceiro"
+                : profile?.subscription_status === "active"
+                ? "Plano Simplou"
+                : profile?.subscription_status === "canceled"
+                ? "Cancelado"
+                : profile?.subscription_status === "past_due"
+                ? "Pagamento Pendente"
+                : "Período de Teste"}
             </p>
-            {(!profile?.role || (profile?.role !== "super_admin" && profile?.role !== "partner")) && (
+            {profile?.role === "user" && profile?.subscription_status !== "active" && (
               <p className="text-sm text-brand-hover font-medium mt-1">
                 {getTrialTimeRemaining()}
               </p>
             )}
           </div>
+          {profile?.role === "user" && profile?.subscription_status === "active" && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleManageSubscription}
+              disabled={loadingPortal}
+            >
+              <CreditCard size={15} />
+              {loadingPortal ? "Aguarde..." : "Gerenciar assinatura"}
+            </Button>
+          )}
         </div>
+        {profile?.role === "user" && profile?.subscription_status !== "active" && (
+          <Button
+            className="bg-brand-primary hover:bg-brand-hover text-white gap-2"
+            onClick={handleSubscribe}
+            disabled={loadingCheckout}
+          >
+            <CreditCard size={15} />
+            {loadingCheckout ? "Aguarde..." : "Assinar — R$ 19,90/mês"}
+          </Button>
+        )}
       </section>
 
       {/* Data & Backup */}

@@ -36,7 +36,7 @@ const bottomNavItems = [
   { to: "/ajuda", label: "Ajuda", icon: HelpCircle },
 ];
 
-function RoleBadge({ role }: { role: string | undefined }) {
+function RoleBadge({ role, subscriptionStatus }: { role: string | undefined; subscriptionStatus: string | undefined }) {
   if (role === "super_admin") {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
@@ -48,6 +48,27 @@ function RoleBadge({ role }: { role: string | undefined }) {
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-light text-brand-hover">
         <Handshake size={10} /> Parceiro
+      </span>
+    );
+  }
+  if (subscriptionStatus === "active") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+        <ShieldCheck size={10} /> Plano Simplou
+      </span>
+    );
+  }
+  if (subscriptionStatus === "past_due") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+        <Clock size={10} /> Pagamento Pendente
+      </span>
+    );
+  }
+  if (subscriptionStatus === "canceled") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">
+        <Clock size={10} /> Cancelado
       </span>
     );
   }
@@ -141,7 +162,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {(expanded || isMobile) && (
           <div className="flex-1 text-left min-w-0">
             <p className="text-xs font-semibold truncate leading-tight">{profile?.name || "Usuário"}</p>
-            <RoleBadge role={profile?.role} />
+            <RoleBadge role={profile?.role} subscriptionStatus={profile?.subscription_status} />
           </div>
         )}
       </button>
@@ -328,7 +349,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <div className="px-3 py-2 border-b border-border mb-1">
                       <p className="text-xs font-semibold truncate">{profile?.name || user?.email}</p>
                       <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
-                      <div className="mt-1"><RoleBadge role={profile?.role} /></div>
+                      <div className="mt-1"><RoleBadge role={profile?.role} subscriptionStatus={profile?.subscription_status} /></div>
                     </div>
                     <button
                       onClick={() => { setMenuOpen(false); navigate("/configuracoes"); }}
