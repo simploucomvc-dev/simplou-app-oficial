@@ -60,8 +60,12 @@ const CommandList = React.forwardRef<
 >(({ className, style, ...props }, ref) => (
   <CommandPrimitive.List
     ref={ref}
-    className={cn("max-h-[300px] overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y", className)}
-    style={{ WebkitOverflowScrolling: "touch", ...style } as React.CSSProperties}
+    className={cn(
+      "max-h-[300px] overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y",
+      "[&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-thumb]:bg-gray-300",
+      className,
+    )}
+    style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y", ...style } as React.CSSProperties}
     {...props}
   />
 ));
@@ -102,16 +106,37 @@ CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
 const CommandItem = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>
->(({ className, ...props }, ref) => (
-  <CommandPrimitive.Item
-    ref={ref}
-    className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:opacity-50",
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, onClick, ...props }, ref) => {
+  const touchStartY = React.useRef(0);
+  const isScrolling = React.useRef(false);
+
+  return (
+    <CommandPrimitive.Item
+      ref={ref}
+      className={cn(
+        "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled=true]:pointer-events-none data-[selected='true']:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:opacity-50",
+        className,
+      )}
+      onTouchStart={(e) => {
+        touchStartY.current = e.touches[0].clientY;
+        isScrolling.current = false;
+      }}
+      onTouchMove={(e) => {
+        const delta = Math.abs(e.touches[0].clientY - touchStartY.current);
+        if (delta > 5) isScrolling.current = true;
+      }}
+      onClick={(e) => {
+        if (isScrolling.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        onClick?.(e);
+      }}
+      {...props}
+    />
+  );
+});
 
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 
