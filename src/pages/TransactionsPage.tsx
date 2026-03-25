@@ -68,6 +68,7 @@ export default function TransactionsPage() {
   const [isRecurrent, setIsRecurrent] = useState(false);
   const [recurrentMonths, setRecurrentMonths] = useState("6");
   const [productPopoverOpen, setProductPopoverOpen] = useState(false);
+  const isMobile = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [isUSD, setIsUSD] = useState(false);
   const [usdRate, setUsdRate] = useState(5.50);
@@ -556,64 +557,77 @@ export default function TransactionsPage() {
                 <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
                   Produto vinculado <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
                 </Label>
-                <Popover open={productPopoverOpen} onOpenChange={setProductPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={productPopoverOpen}
-                      className="w-full justify-between h-11 font-normal bg-background"
-                    >
-                      {linkedProductId
-                        ? availableProducts.find((p) => p.id === linkedProductId)?.name
-                        : "Nenhum produto selecionado"}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0" align="start" style={{ width: 'var(--radix-popover-trigger-width)' }}>
-                    <Command>
-                      <CommandInput placeholder="Buscar produto..." className="h-9" />
-                      <CommandList>
-                        <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
-                        <CommandGroup>
-                          <CommandItem
-                            value="none"
-                            onSelect={() => {
-                              handleProductLink("");
-                              setProductPopoverOpen(false);
-                            }}
-                          >
-                            Nenhum produto
-                            <Check
-                              className={cn(
-                                "ml-auto h-4 w-4",
-                                !linkedProductId ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                          </CommandItem>
-                          {availableProducts.map((p) => (
+                {isMobile ? (
+                  <select
+                    value={linkedProductId}
+                    onChange={(e) => handleProductLink(e.target.value)}
+                    className="w-full h-11 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">Nenhum produto selecionado</option>
+                    {availableProducts.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <Popover open={productPopoverOpen} onOpenChange={setProductPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={productPopoverOpen}
+                        className="w-full justify-between h-11 font-normal bg-background"
+                      >
+                        {linkedProductId
+                          ? availableProducts.find((p) => p.id === linkedProductId)?.name
+                          : "Nenhum produto selecionado"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                      <Command>
+                        <CommandInput placeholder="Buscar produto..." className="h-9" />
+                        <CommandList>
+                          <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+                          <CommandGroup>
                             <CommandItem
-                              key={p.id}
-                              value={p.name}
+                              value="none"
                               onSelect={() => {
-                                handleProductLink(p.id);
+                                handleProductLink("");
                                 setProductPopoverOpen(false);
                               }}
                             >
-                              {p.name}
+                              Nenhum produto
                               <Check
                                 className={cn(
                                   "ml-auto h-4 w-4",
-                                  linkedProductId === p.id ? "opacity-100" : "opacity-0"
+                                  !linkedProductId ? "opacity-100" : "opacity-0"
                                 )}
                               />
                             </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                            {availableProducts.map((p) => (
+                              <CommandItem
+                                key={p.id}
+                                value={p.name}
+                                onSelect={() => {
+                                  handleProductLink(p.id);
+                                  setProductPopoverOpen(false);
+                                }}
+                              >
+                                {p.name}
+                                <Check
+                                  className={cn(
+                                    "ml-auto h-4 w-4",
+                                    linkedProductId === p.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
                 {linkedProductId && (
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                     Preço do produto preenchido automaticamente (editável)
