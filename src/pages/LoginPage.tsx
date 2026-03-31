@@ -91,7 +91,7 @@ export default function LoginPage() {
         </div>
 
         <Button variant="outline" size="full" asChild>
-          <Link to="/registro">Criar conta grátis</Link>
+          <Link to="/registro">Criar conta</Link>
         </Button>
       </div>
     </div>
