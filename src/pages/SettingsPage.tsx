@@ -361,18 +361,6 @@ export default function SettingsPage() {
     }
   };
 
-  const getTrialTimeRemaining = () => {
-    if (!profile) return null;
-    const trialEnd = profile.trial_ends_at
-      ? new Date(profile.trial_ends_at)
-      : new Date(new Date(profile.created_at).getTime() + 7 * 24 * 60 * 60 * 1000);
-    const diff = trialEnd.getTime() - Date.now();
-    if (diff <= 0) return "Expirado";
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    return `${days} dias e ${hours} horas restantes`;
-  };
-
   const handleExportData = async () => {
     if (!user) return;
     toast.loading("Preparando dados para exportação...");
@@ -716,13 +704,8 @@ export default function SettingsPage() {
                 ? "Cancelado"
                 : profile?.subscription_status === "past_due"
                 ? "Pagamento Pendente"
-                : "Período de Teste"}
+                : "Sem assinatura ativa"}
             </p>
-            {profile?.role === "user" && profile?.subscription_status !== "active" && (
-              <p className="text-sm text-brand-hover font-medium mt-1">
-                {getTrialTimeRemaining()}
-              </p>
-            )}
           </div>
           {profile?.role === "user" && profile?.subscription_status === "active" && (
             <Button

@@ -40,16 +40,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 function checkIsBlocked(profile: UserProfile | null): boolean {
   if (!profile) return false;
   if (profile.role === "super_admin" || profile.role === "partner") return false;
-  const status = profile.subscription_status;
-  if (status === "active") return false;
-  if (status === "trial" && profile.trial_ends_at) {
-    return new Date(profile.trial_ends_at) < new Date();
-  }
-  if (status === "canceled" || status === "past_due") return true;
-  // fallback: trial sem data definida, usa created_at
-  const created = new Date(profile.created_at);
-  const diffDays = (Date.now() - created.getTime()) / (1000 * 60 * 60 * 24);
-  return diffDays > 7;
+  return profile.subscription_status !== "active";
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

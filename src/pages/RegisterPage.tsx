@@ -105,10 +105,19 @@ export default function RegisterPage() {
       const { error } = await supabase.auth.verifyOtp({ email, token: otpToken, type: "signup" });
       if (error) {
         toast.error(error.message);
-      } else {
-        toast.success("Conta confirmada com sucesso!");
-        navigate("/dashboard");
+        return;
       }
+      // Redireciona para o Stripe imediatamente após confirmar o email
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error: checkoutError } = await supabase.functions.invoke("create-checkout-session", {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (checkoutError) throw checkoutError;
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      toast.error("Erro ao iniciar pagamento. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -141,7 +150,7 @@ export default function RegisterPage() {
               </InputOTP>
             </div>
             <Button type="submit" size="full" disabled={loading || otpToken.length < 6}>
-              {loading ? "Verificando..." : "Confirmar Código"}
+              {loading ? "Aguarde..." : "Confirmar e ir para pagamento"}
             </Button>
             <button
               type="button"
@@ -161,12 +170,6 @@ export default function RegisterPage() {
       <div className="w-full max-w-sm">
         <div className="flex justify-center mb-8">
           <img src="/simplo-verde.png" alt="simplou." className="h-14" />
-        </div>
-
-        {/* Trial banner */}
-        <div className="bg-[#56CC06]/10 border border-[#56CC06]/30 rounded-xl px-4 py-3 mb-6 text-center">
-          <p className="text-sm font-bold text-[#56CC06]">7 dias grátis</p>
-          <p className="text-xs text-muted-foreground mt-0.5">Sem cartão de crédito &middot; Cancele quando quiser</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -251,7 +254,7 @@ export default function RegisterPage() {
             disabled={loading || (password.length > 0 && !isPasswordValid) || (name.length > 0 && !isNameValid)}
             className="bg-brand-primary hover:bg-brand-hover text-white mt-2"
           >
-            {loading ? "Criando conta..." : "Criar conta grátis"}
+            {loading ? "Criando conta..." : "Criar conta"}
           </Button>
         </form>
 

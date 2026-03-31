@@ -7,8 +7,10 @@ import { toast } from "sonner";
 
 
 export default function TrialExpiredScreen() {
-    const { signOut } = useAuth();
+    const { signOut, profile } = useAuth();
     const [loading, setLoading] = useState(false);
+
+    const isWaiting = profile?.subscription_status === "waiting";
 
     const handleSubscribe = async () => {
         setLoading(true);
@@ -39,10 +41,12 @@ export default function TrialExpiredScreen() {
                 {/* Title */}
                 <div className="space-y-2">
                     <h1 className="text-2xl font-bold text-foreground">
-                        Período de teste encerrado
+                        {isWaiting ? "Complete seu cadastro" : "Acesso bloqueado"}
                     </h1>
                     <p className="text-muted-foreground text-base leading-relaxed">
-                        Seu período de teste de <strong>7 dias</strong> expirou. Assine o Plano Simplou para continuar acessando.
+                        {isWaiting
+                            ? "Para começar a usar o Simplou, finalize o pagamento da sua assinatura."
+                            : "Sua assinatura está inativa. Assine o Plano Simplou para continuar acessando."}
                     </p>
                 </div>
 
@@ -80,7 +84,7 @@ export default function TrialExpiredScreen() {
                         disabled={loading}
                     >
                         <CreditCard size={16} className="mr-2" />
-                        {loading ? "Aguarde..." : "Assinar agora — R$ 19,90/mês"}
+                        {loading ? "Aguarde..." : isWaiting ? "Concluir pagamento — R$ 19,90/mês" : "Assinar agora — R$ 19,90/mês"}
                     </Button>
                     <Button
                         variant="outline"
