@@ -12,10 +12,10 @@ import {
   Menu,
   X,
   HelpCircle,
-  User,
   ShieldCheck,
   Clock,
   Handshake,
+  Sparkles,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { QuickActionButton } from "./QuickActionButton";
 import { OnboardingButton } from "./OnboardingButton";
 import { startOnboarding } from "@/lib/onboarding";
+import { useChangelog } from "@/hooks/use-changelog";
+import ChangelogModal from "./ChangelogModal";
 import "@/styles/onboarding.css";
 
 const mainNavItems = [
@@ -55,6 +57,13 @@ function RoleBadge({ role, subscriptionStatus }: { role: string | undefined; sub
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
         <ShieldCheck size={10} /> Plano Simplou
+      </span>
+    );
+  }
+  if (subscriptionStatus === "trialing") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand-light text-brand-hover">
+        <Clock size={10} /> 7 dias grátis
       </span>
     );
   }
@@ -92,16 +101,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const { user, profile, loading, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
+  const { latest, unseen, markAsSeen } = useChangelog();
+  const [changelogOpen, setChangelogOpen] = useState(false);
 
   // Inicia o tour automaticamente no primeiro acesso (validado no backend)
   useEffect(() => {
     if (loading || !profile || !user) return;
 
-    // Só dispara automaticamente se onboarding_completed for false no banco
     if (profile.onboarding_completed === false) {
       const timer = setTimeout(() => {
         startOnboarding(async () => {
-          // Ao finalizar ou fechar, marcamos no banco para não repetir AUTOMATICAMENTE
           const { error } = await supabase
             .from("profiles")
             .update({ onboarding_completed: true })
@@ -113,6 +122,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       return () => clearTimeout(timer);
     }
   }, [profile, loading, user]);
+
+  // Abre o modal de novidades automaticamente quando há versão não vista
+  useEffect(() => {
+    if (loading || !profile) return;
+    if (profile.onboarding_completed === false) return; // espera o onboarding
+    if (unseen) setChangelogOpen(true);
+  }, [unseen, loading, profile]);
 
   const toggleExpanded = () => {
     setExpanded((prev) => {
@@ -267,6 +283,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Bottom: Configurações + Ajuda + User */}
       <div className="border-t border-border px-2 pt-2 pb-3 shrink-0 space-y-0.5">
+        {/* Botão Novidades */}
+        <button
+          onClick={() => setChangelogOpen(true)}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 text-muted-foreground hover:bg-accent hover:text-foreground relative",
+            !expanded && !mobile && "justify-center px-2"
+          )}
+        >
+          <Sparkles size={18} className="shrink-0" />
+          {(expanded || mobile) && <span>Novidades</span>}
+          {unseen && (
+            <span className="absolute top-2 left-7 w-2 h-2 rounded-full bg-brand-primary" />
+          )}
+        </button>
         {bottomNavItems.map((item) => (
           <NavLink
             key={item.to}
@@ -314,13 +344,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Mobile overlay */}
-      {isMobile && mobileOpen && (
+      {isMobile && (
         <>
           <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+            className={cn(
+              "fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity duration-300",
+              mobileOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+            )}
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border z-50">
+          <aside className={cn(
+            "fixed left-0 top-0 h-full w-64 bg-card border-r border-border z-50 transition-transform duration-300 ease-in-out",
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          )}>
             {sidebarContent(true)}
           </aside>
         </>
@@ -395,6 +431,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Botão de repetir tour (apenas Desktop) */}
       {!isMobile && <OnboardingButton className="fixed top-4 right-4" side="left" />}
+
+      {/* Modal de novidades */}
+      {changelogOpen && latest && (
+        <ChangelogModal
+          changelog={latest}
+          onClose={() => {
+            if (unseen) markAsSeen(latest.id);
+            setChangelogOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -30,6 +30,7 @@ interface Props {
 
 export default function TransactionDetailModal({ transaction, availableProducts, usdRate = 5.50, onClose, onChanged }: Props) {
   const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editValue, setEditValue] = useState("");
   const [editDate, setEditDate] = useState<Date>(new Date());
@@ -47,7 +48,8 @@ export default function TransactionDetailModal({ transaction, availableProducts,
   const isIncome = transaction.type === "income";
 
   const openEdit = () => {
-    setEditDesc(transaction.description);
+    setEditName(transaction.name);
+    setEditDesc(transaction.description ?? "");
     setEditValue(String(transaction.value));
     setEditDate(new Date(transaction.date + "T12:00:00"));
     setEditProductId(transaction.product_id || "");
@@ -62,8 +64,8 @@ export default function TransactionDetailModal({ transaction, availableProducts,
     }
   };
 
-  const baseDesc = transaction.description.replace(/\s*\(Parcela \d+\/\d+\)$/, "");
-  const isRecurring = baseDesc !== transaction.description;
+  const baseDesc = transaction.name.replace(/\s*\(Parcela \d+\/\d+\)$/, "");
+  const isRecurring = baseDesc !== transaction.name;
 
   const handleDelete = async () => {
     const { error } = await supabase.from("transactions").delete().eq("id", transaction.id);
@@ -78,7 +80,7 @@ export default function TransactionDetailModal({ transaction, availableProducts,
       .from("transactions")
       .select("id")
       .eq("user_id", userData.user.id)
-      .ilike("description", `${baseDesc}%`)
+      .ilike("name", `${baseDesc}%`)
       .gte("date", transaction.date);
     if (!toDelete || toDelete.length === 0) return;
     const { error } = await supabase.from("transactions").delete().in("id", toDelete.map((t) => t.id));
@@ -94,7 +96,7 @@ export default function TransactionDetailModal({ transaction, availableProducts,
           .from("transactions")
           .select("id")
           .eq("user_id", userData.user.id)
-          .ilike("description", `${baseDesc}%`)
+          .ilike("name", `${baseDesc}%`)
           .gt("date", transaction.date);
         if (futureItems && futureItems.length > 0) {
           setRecurringDeleteOpen(true);
@@ -167,8 +169,8 @@ export default function TransactionDetailModal({ transaction, availableProducts,
           
           <div style="margin-top: 30px;">
             <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #eee;">
-              <span style="font-weight: bold;">Descrição:</span>
-              <span style="font-size: 16px;">${transaction.description}</span>
+              <span style="font-weight: bold;">Nome:</span>
+              <span style="font-size: 16px;">${transaction.name}</span>
             </div>
             <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #eee;">
               <span style="font-weight: bold;">Data da Operação:</span>
@@ -176,7 +178,7 @@ export default function TransactionDetailModal({ transaction, availableProducts,
             </div>
             <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #eee;">
               <span style="font-weight: bold;">Tipo:</span>
-              <span style="font-size: 16px;">${isIncome ? 'Entrada (Receita)' : 'Saída (Despesa)'}</span>
+              <span style="font-size: 16px;">${isIncome ? 'Receita' : 'Despesa'}</span>
             </div>
           </div>
           <div style="margin-top: 60px; text-align: center; font-size: 12px; color: #999;">
@@ -200,9 +202,9 @@ export default function TransactionDetailModal({ transaction, availableProducts,
     // @ts-ignore
     const csvContent = "data:text/csv;charset=utf-8,"
       // @ts-ignore
-      + "ID,Descricao,Valor,Data,Tipo,Produto,Anexo\n"
+      + "ID,Nome,Descricao,Valor,Data,Tipo,Produto,Anexo\n"
       // @ts-ignore
-      + `${transaction.id},"${transaction.description}",${transaction.value},${transaction.date},${transaction.type},"${transaction.products?.name || ''}","${transaction.attachment_url || ''}"`;
+      + `${transaction.id},"${transaction.name}","${transaction.description || ''}",${transaction.value},${transaction.date},${transaction.type},"${transaction.products?.name || ''}","${transaction.attachment_url || ''}"`;
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -214,13 +216,14 @@ export default function TransactionDetailModal({ transaction, availableProducts,
   };
 
   const handleSaveEdit = async () => {
-    if (!editDesc.trim() || !editValue) { toast.error("Preencha todos os campos"); return; }
+    if (!editName.trim() || !editValue) { toast.error("Preencha todos os campos"); return; }
     const val = parseFloat(editValue);
     if (val <= 0) { toast.error("Valor deve ser positivo"); return; }
     const dateStr = `${editDate.getFullYear()}-${String(editDate.getMonth() + 1).padStart(2, "0")}-${String(editDate.getDate()).padStart(2, "0")}`;
     setSaving(true);
     const { error } = await supabase.from("transactions").update({
-      description: editDesc.trim(),
+      name: editName.trim(),
+      description: editDesc.trim() || null,
       value: val,
       date: dateStr,
       product_id: editProductId || null,
@@ -245,7 +248,7 @@ export default function TransactionDetailModal({ transaction, availableProducts,
               <div className={`w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center ${isIncome ? "bg-success/10" : "bg-destructive/10"}`}>
                 {isIncome ? <ArrowDownCircle size={28} className="text-success" /> : <ArrowUpCircle size={28} className="text-destructive" />}
               </div>
-              <p className="text-xs text-muted-foreground font-medium uppercase">{isIncome ? "Entrada" : "Saída"}</p>
+              <p className="text-xs text-muted-foreground font-medium uppercase">{isIncome ? "Receita" : "Despesa"}</p>
               <p className={`text-3xl font-bold mt-1 ${isIncome ? "text-success" : "text-destructive"}`}>
                 {isIncome ? "+" : "-"}{formatCurrency(Number(transaction.value))}
               </p>
@@ -253,9 +256,15 @@ export default function TransactionDetailModal({ transaction, availableProducts,
 
             <div className="space-y-3 mt-2">
               <div>
-                <p className="text-xs text-muted-foreground">Descrição</p>
-                <p className="font-semibold">{transaction.description}</p>
+                <p className="text-xs text-muted-foreground">Nome</p>
+                <p className="font-semibold">{transaction.name}</p>
               </div>
+              {transaction.description && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Descrição</p>
+                  <p className="text-sm text-foreground">{transaction.description}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-muted-foreground">Data</p>
                 <p className="font-semibold">{formatDateLong(transaction.date)}</p>
@@ -312,7 +321,7 @@ export default function TransactionDetailModal({ transaction, availableProducts,
 
                 return (
                   <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Custos desta entrada</p>
+                    <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wide">Custos desta receita</p>
                     {varCosts.length > 0 && (
                       <div className="bg-muted/40 rounded-lg px-3 py-2 space-y-1.5">
                         <p className="text-[10px] font-bold uppercase text-muted-foreground">Custos Variáveis</p>
@@ -427,7 +436,7 @@ export default function TransactionDetailModal({ transaction, availableProducts,
               onOpenChange={setDeleteDialogOpen}
               onConfirm={handleDelete}
               title="Aviso: Exclusão Permanente"
-              itemName={transaction.description}
+              itemName={transaction.name}
             />
 
             <Dialog open={recurringDeleteOpen} onOpenChange={setRecurringDeleteOpen}>
@@ -459,23 +468,6 @@ export default function TransactionDetailModal({ transaction, availableProducts,
           </>
         ) : (
           <div className="space-y-4 mt-1">
-            <div className="bg-muted/30 border border-border rounded-lg p-3">
-              <Label className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
-                <File size={13} /> {transaction.attachment_url ? "Alterar Comprovante" : "Anexar Comprovante"}
-              </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.pdf"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="text-xs flex-1 h-9 cursor-pointer file:cursor-pointer"
-                />
-                {uploading && <Loader2 size={14} className="text-muted-foreground animate-spin" />}
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">Salvamento automático. Max 2MB.</p>
-            </div>
-
             {isIncome && availableProducts.length > 0 && (
               <div>
                 <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
@@ -538,13 +530,23 @@ export default function TransactionDetailModal({ transaction, availableProducts,
               </div>
             )}
             <div>
+              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
+                Nome <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="h-11"
+                autoFocus
+              />
+            </div>
+            <div>
               <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Descrição</Label>
               <ExpandableInput
                 value={editDesc}
                 onChange={(e) => setEditDesc(e.target.value)}
                 modalTitle="Descrição da Operação"
                 rows={2}
-                autoFocus
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -582,6 +584,23 @@ export default function TransactionDetailModal({ transaction, availableProducts,
                 </Popover>
               </div>
             </div>
+            <div className="bg-muted/30 border border-border rounded-lg p-3">
+              <Label className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
+                <File size={13} /> {transaction.attachment_url ? "Alterar Comprovante" : "Anexar Comprovante"} <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="text-xs flex-1 h-9 cursor-pointer file:cursor-pointer"
+                />
+                {uploading && <Loader2 size={14} className="text-muted-foreground animate-spin" />}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1.5 leading-tight">Salvamento automático. Max 2MB.</p>
+            </div>
+
             <div className="flex gap-3 pt-1">
               <Button variant="outline" className="flex-1" onClick={() => setEditing(false)}>Cancelar</Button>
               <Button

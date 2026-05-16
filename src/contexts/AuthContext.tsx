@@ -40,7 +40,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 function checkIsBlocked(profile: UserProfile | null): boolean {
   if (!profile) return false;
   if (profile.role === "super_admin" || profile.role === "partner") return false;
-  return profile.subscription_status !== "active";
+  return !["active", "trialing"].includes(profile.subscription_status ?? "");
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

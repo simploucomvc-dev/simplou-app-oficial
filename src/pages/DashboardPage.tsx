@@ -78,7 +78,7 @@ export default function DashboardPage() {
   });
 
   const cards = [
-    { id: "card-receita", label: "Receita total", value: totalIncome, icon: TrendingUp, color: "text-[#88E20F]", bg: "bg-[#88E20F]/10", note: futureIncome > 0 ? `Entradas previstas: ${formatCurrency(futureIncome)}` : null },
+    { id: "card-receita", label: "Receita total", value: totalIncome, icon: TrendingUp, color: "text-[#88E20F]", bg: "bg-[#88E20F]/10", note: futureIncome > 0 ? `Receitas previstas: ${formatCurrency(futureIncome)}` : null },
     { id: "card-despesa", label: "Despesa total", value: totalExpense, icon: TrendingDown, color: "text-destructive", bg: "bg-destructive/10", note: null },
     { id: "card-lucro", label: "Lucro líquido", value: profit, icon: Sparkles, color: profit >= 0 ? "text-success" : "text-destructive", bg: profit >= 0 ? "bg-success/10" : "bg-destructive/10", note: null },
   ];

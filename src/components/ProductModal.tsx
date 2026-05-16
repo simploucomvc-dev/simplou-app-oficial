@@ -7,19 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Lightbulb, Sparkles, Check } from "lucide-react";
-import { PRODUCT_ICONS, ICON_MAP, setProductIcon, getProductIconName, maskBRL, parseBRL, calcFixedCostForProduct } from "@/lib/product-icons";
+import { Lightbulb, Sparkles, Pencil } from "lucide-react";
+import { PRODUCT_ICONS, ICON_MAP, setProductIcon, getProductIconName, maskBRL, parseBRL } from "@/lib/product-icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ExpandableInput } from "@/components/ui/expandable-input";
 import { cn } from "@/lib/utils";
-import type { Product, FixedCost } from "@/pages/ProductsPage";
+import type { Product } from "@/pages/ProductsPage";
 
 interface Props {
   open: boolean;
   product?: Product;
   entryType?: "product" | "service";
-  fixedCosts: FixedCost[];
-  usdRate?: number;
   onClose: () => void;
   onSaved: () => void;
 }
@@ -29,7 +27,7 @@ function toMask(value: number | undefined): string {
   return maskBRL(String(Math.round(value * 100)));
 }
 
-export default function ProductModal({ open, product, entryType = "product", fixedCosts, usdRate = 1, onClose, onSaved }: Props) {
+export default function ProductModal({ open, product, entryType = "product", onClose, onSaved }: Props) {
   const { user } = useAuth();
   const [name, setName] = useState(product?.name || "");
   const [description, setDescription] = useState(product?.description || "");
@@ -38,8 +36,8 @@ export default function ProductModal({ open, product, entryType = "product", fix
   const [selectedIcon, setSelectedIcon] = useState(() => product ? getProductIconName(product.id) : "Package");
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [ignoreFixedCosts, setIgnoreFixedCosts] = useState(product?.ignore_fixed_costs ?? false);
   const [localEntryType, setLocalEntryType] = useState<"product" | "service">(product?.entry_type || entryType);
+  const [stockQuantity, setStockQuantity] = useState<string>(product?.stock_quantity != null ? String(product.stock_quantity) : "");
 
   useEffect(() => {
     if (!open) return;
@@ -50,24 +48,14 @@ export default function ProductModal({ open, product, entryType = "product", fix
     setSelectedIcon(product ? getProductIconName(product.id) : "Package");
     setIconPickerOpen(false);
     setLocalEntryType(product?.entry_type || entryType);
-    setIgnoreFixedCosts(product?.ignore_fixed_costs ?? false);
+    setStockQuantity(product?.stock_quantity != null ? String(product.stock_quantity) : "");
   }, [open, product, entryType]);
 
   const cp = parseBRL(costPrice);
   const sp = parseBRL(sellingPrice);
 
-  // Custos fixos: BRL (para preço sugerido, sem circularidade) + % sobre sp atual
-  const fixedCostBRL = ignoreFixedCosts ? 0 : fixedCosts
-    .filter(c => c.is_active && (!c.type || c.type === "fixed") && c.value_type !== "percentage")
-    .reduce((s, c) => s + (c.value_type === "usd" ? Number(c.value) * usdRate : Number(c.value)), 0);
-  const effectiveFixedCost = ignoreFixedCosts ? 0 : calcFixedCostForProduct(fixedCosts, sp, cp, usdRate);
-  const fixedCostPctTotal = ignoreFixedCosts ? 0 : fixedCosts
-    .filter(c => c.is_active && (!c.type || c.type === "fixed") && c.value_type === "percentage")
-    .reduce((s, c) => s + Number(c.value), 0);
-
-  // Sugerido usa apenas R$ fixos (sem % para evitar circularidade)
-  const suggestedPrice = (cp + fixedCostBRL) * 2;
-  const profit = sp - effectiveFixedCost - cp;
+  const suggestedPrice = cp * 2;
+  const profit = sp - cp;
 
   const handleOpenChange = (isOpen: boolean) => {
     if (!isOpen) onClose();
@@ -80,14 +68,15 @@ export default function ProductModal({ open, product, entryType = "product", fix
 
     setSaving(true);
 
+    const parsedStock = stockQuantity.trim() !== "" ? parseInt(stockQuantity) : null;
     const data = {
       user_id: user.id,
       name: name.trim(),
       description: description.trim() || null,
       cost_price: cp,
       selling_price: sp,
-      ignore_fixed_costs: ignoreFixedCosts,
       entry_type: localEntryType,
+      stock_quantity: localEntryType === "product" ? parsedStock : null,
     };
 
     if (product) {
@@ -123,7 +112,41 @@ export default function ProductModal({ open, product, entryType = "product", fix
         {/* Header fixo */}
         <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
           <DialogTitle className="text-xl flex items-center gap-2">
-            <SelectedIconComponent size={20} className="text-brand-hover" />
+            <Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  title="Clique para trocar o ícone"
+                  className="relative w-8 h-8 rounded-lg bg-brand-light hover:bg-brand-primary/20 border border-brand-primary/30 hover:border-brand-primary flex items-center justify-center transition-all shrink-0"
+                >
+                  <SelectedIconComponent size={16} className="text-brand-hover" />
+                  <span className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-brand-primary text-white rounded-full flex items-center justify-center shadow-sm pointer-events-none">
+                    <Pencil size={7} />
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-3" align="start" sideOffset={8}>
+                <p className="text-xs font-semibold text-muted-foreground mb-2">Escolha um ícone</p>
+                <div className="grid grid-cols-5 gap-1">
+                  {PRODUCT_ICONS.map(({ name: iconName, icon: Icon, label }) => (
+                    <button
+                      key={iconName}
+                      type="button"
+                      title={label}
+                      onClick={() => { setSelectedIcon(iconName); setIconPickerOpen(false); }}
+                      className={cn(
+                        "w-9 h-9 rounded-lg flex items-center justify-center transition-all",
+                        selectedIcon === iconName
+                          ? "bg-brand-primary text-white shadow-sm"
+                          : "text-muted-foreground hover:bg-brand-light hover:text-brand-hover"
+                      )}
+                    >
+                      <Icon size={16} />
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
             {product
               ? (localEntryType === "service" ? "Editar Serviço" : "Editar Produto")
               : (localEntryType === "service" ? "Cadastrar Serviço" : "Cadastrar Produto")}
@@ -158,14 +181,14 @@ export default function ProductModal({ open, product, entryType = "product", fix
             {/* Nome */}
             <div>
               <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
-                {localEntryType === "service" ? "Nome do serviço" : "Nome do produto"}
+                {localEntryType === "service" ? "Nome do serviço" : "Nome do produto"} <span className="text-destructive">*</span>
               </Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Bolo de chocolate" className="h-11" />
             </div>
 
             {/* Descrição */}
             <div>
-              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Descrição (opcional)</Label>
+              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Descrição <span className="text-xs font-normal text-muted-foreground">(opcional)</span></Label>
               <ExpandableInput
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -175,49 +198,29 @@ export default function ProductModal({ open, product, entryType = "product", fix
               />
             </div>
 
-            {/* Ícone */}
-            <div>
-              <Label className="text-muted-foreground text-sm font-medium mb-2 block">
-                {localEntryType === "service" ? "Ícone do serviço" : "Ícone do produto"}
-              </Label>
-              <Popover open={iconPickerOpen} onOpenChange={setIconPickerOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="w-12 h-12 rounded-xl bg-brand-light border-2 border-brand-primary/40 hover:border-brand-primary flex items-center justify-center transition-all"
-                    title="Clique para trocar o ícone"
-                  >
-                    <SelectedIconComponent size={22} className="text-brand-hover" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-3" align="start" sideOffset={8}>
-                  <p className="text-xs font-semibold text-muted-foreground mb-2">Escolha um ícone</p>
-                  <div className="grid grid-cols-5 gap-1">
-                    {PRODUCT_ICONS.map(({ name: iconName, icon: Icon, label }) => (
-                      <button
-                        key={iconName}
-                        type="button"
-                        title={label}
-                        onClick={() => { setSelectedIcon(iconName); setIconPickerOpen(false); }}
-                        className={cn(
-                          "w-9 h-9 rounded-lg flex items-center justify-center transition-all",
-                          selectedIcon === iconName
-                            ? "bg-brand-primary text-white shadow-sm"
-                            : "text-muted-foreground hover:bg-brand-light hover:text-brand-hover"
-                        )}
-                      >
-                        <Icon size={16} />
-                      </button>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Preço de custo */}
+            {/* Estoque (só produto) */}
             {localEntryType === "product" && (
               <div>
-                <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de compra (custo)</Label>
+                <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">
+                  Quantidade em estoque <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+                </Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  step="1"
+                  value={stockQuantity}
+                  onChange={(e) => setStockQuantity(e.target.value)}
+                  placeholder="Ex: 50"
+                  className="h-11"
+                />
+              </div>
+            )}
+
+            {/* Preço de custo (só produto) */}
+            {localEntryType === "product" && (
+              <div>
+                <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de compra (custo) <span className="text-xs font-normal text-muted-foreground">(opcional)</span></Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
                   <Input
@@ -232,40 +235,6 @@ export default function ProductModal({ open, product, entryType = "product", fix
               </div>
             )}
 
-            {/* Custo fixo (automático) */}
-            <div className="bg-muted border border-border rounded-lg p-3">
-              <p className="text-xs text-muted-foreground mb-1">Custo fixo total (automático)</p>
-              <div className={cn("flex items-center gap-2 flex-wrap", ignoreFixedCosts && "opacity-40 line-through")}>
-                {(fixedCostBRL > 0 || fixedCostPctTotal === 0) && (
-                  <span className="text-lg font-bold">{formatCurrency(fixedCostBRL)}</span>
-                )}
-                {fixedCostPctTotal > 0 && (
-                  <span className="inline-flex items-center text-sm font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded-md">
-                    + {fixedCostPctTotal}% <span className="ml-1 font-normal text-xs">{sp > 0 ? `= ${formatCurrency(effectiveFixedCost - fixedCostBRL)}` : "do preço"}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Ignorar custos fixos */}
-            <button
-              type="button"
-              onClick={() => setIgnoreFixedCosts((v) => !v)}
-              className="flex items-center gap-2.5 w-full text-left"
-            >
-              <div
-                className={cn(
-                  "w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors",
-                  ignoreFixedCosts
-                    ? "bg-brand-primary border-brand-primary"
-                    : "border-muted-foreground/40 bg-background"
-                )}
-              >
-                {ignoreFixedCosts && <Check size={10} className="text-white" strokeWidth={3} />}
-              </div>
-              <span className="text-sm text-muted-foreground">Ignorar custos fixos neste produto</span>
-            </button>
-
             <div className="border-t border-border" />
 
             {/* Preço sugerido */}
@@ -278,7 +247,7 @@ export default function ProductModal({ open, product, entryType = "product", fix
 
             {/* Preço de venda */}
             <div>
-              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de venda (seu preço final)</Label>
+              <Label className="text-muted-foreground text-sm font-medium mb-1.5 block">Preço de venda (seu preço final) <span className="text-xs font-normal text-muted-foreground">(opcional)</span></Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
                 <Input
@@ -304,17 +273,21 @@ export default function ProductModal({ open, product, entryType = "product", fix
               </p>
               {sp > 0 && (
                 <p className="text-xs text-muted-foreground mt-1">
-                  (Preço {formatCurrency(sp)} - Custos {formatCurrency(effectiveFixedCost + cp)})
+                  (Preço {formatCurrency(sp)} - Custo {formatCurrency(cp)})
                 </p>
               )}
             </div>
 
-            <div className="flex gap-3 pt-2">
-              <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
-              <Button className="flex-1 bg-brand-primary hover:bg-brand-hover text-white" onClick={handleSave} disabled={saving}>
-                {saving ? "Salvando..." : (localEntryType === "service" ? "Salvar Serviço" : "Salvar Produto")}
-              </Button>
-            </div>
+          </div>
+        </div>
+
+        {/* Rodapé fixo */}
+        <div className="px-6 py-4 border-t border-border shrink-0">
+          <div className="flex gap-3">
+            <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
+            <Button className="flex-1 bg-brand-primary hover:bg-brand-hover text-white" onClick={handleSave} disabled={saving}>
+              {saving ? "Salvando..." : (localEntryType === "service" ? "Salvar Serviço" : "Salvar Produto")}
+            </Button>
           </div>
         </div>
       </DialogContent>

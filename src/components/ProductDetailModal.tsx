@@ -1,25 +1,22 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
-import { ICON_MAP, getProductIconName, calcFixedCostForProduct } from "@/lib/product-icons";
-import { Package, Pencil, Trash2, AlignLeft, Sparkles } from "lucide-react";
-import type { Product, FixedCost } from "@/pages/ProductsPage";
+import { ICON_MAP, getProductIconName } from "@/lib/product-icons";
+import { Package, Pencil, Trash2, AlignLeft, Sparkles, Boxes } from "lucide-react";
+import type { Product } from "@/pages/ProductsPage";
 
 interface Props {
     product: Product | null;
-    fixedCosts: FixedCost[];
-    usdRate?: number;
     onClose: () => void;
     onEdit: () => void;
     onDelete: () => void;
 }
 
-export default function ProductDetailModal({ product, fixedCosts, usdRate = 1, onClose, onEdit, onDelete }: Props) {
+export default function ProductDetailModal({ product, onClose, onEdit, onDelete }: Props) {
     if (!product) return null;
 
     const IconComponent = ICON_MAP[getProductIconName(product.id)] || Package;
-    const fc = product.ignore_fixed_costs ? 0 : calcFixedCostForProduct(fixedCosts, Number(product.selling_price), Number(product.cost_price), usdRate);
-    const profit = Number(product.selling_price) - Number(product.variable_cost) - fc - Number(product.cost_price);
+    const profit = Number(product.selling_price) - Number(product.cost_price);
 
     return (
         <Dialog open={!!product} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -41,33 +38,34 @@ export default function ProductDetailModal({ product, fixedCosts, usdRate = 1, o
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                         <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
                             <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Custo de compra</p>
                             <p className="text-lg font-semibold">{formatCurrency(Number(product.cost_price))}</p>
                         </div>
                         <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
-                            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Custo variável</p>
-                            <p className="text-lg font-semibold">{formatCurrency(Number(product.variable_cost))}</p>
-                        </div>
-                        <div className="bg-card border border-border rounded-2xl p-4 shadow-sm sm:col-span-2 flex justify-between items-center gap-4">
-                            <div>
-                                <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Custos fixos</p>
-                                <div className="flex items-center gap-1.5">
-                                    <p className="text-lg font-semibold">{formatCurrency(fc)}</p>
-                                    {product.ignore_fixed_costs && (
-                                        <span className="text-[9px] bg-muted-foreground/10 text-muted-foreground px-1.5 py-0.5 rounded font-bold uppercase flex items-center gap-1">
-                                            Ignorado
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Preço final</p>
-                                <p className="text-xl font-bold text-brand-hover">{formatCurrency(Number(product.selling_price))}</p>
-                            </div>
+                            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1">Preço final</p>
+                            <p className="text-xl font-bold text-brand-hover">{formatCurrency(Number(product.selling_price))}</p>
                         </div>
                     </div>
+
+                    {product.entry_type !== "service" && product.stock_quantity != null && (() => {
+                        const qty = product.stock_quantity!;
+                        const isLow = qty <= 5;
+                        const isEmpty = qty <= 0;
+                        return (
+                          <div className={`rounded-2xl p-4 flex justify-between items-center border ${isEmpty ? "bg-red-50 border-red-200" : isLow ? "bg-yellow-50 border-yellow-200" : "bg-green-50 border-green-200"}`}>
+                            <div className={`flex items-center gap-1.5 text-sm font-bold ${isEmpty ? "text-red-600" : isLow ? "text-yellow-700" : "text-green-700"}`}>
+                              <Boxes size={16} /> Estoque atual
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-2xl font-black ${isEmpty ? "text-red-600" : isLow ? "text-yellow-700" : "text-green-700"}`}>{qty}</p>
+                              {isEmpty && <p className="text-[10px] text-red-500 font-medium">Zerado</p>}
+                              {!isEmpty && isLow && <p className="text-[10px] text-yellow-600 font-medium">Estoque baixo</p>}
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                     <div className="bg-success/5 border border-success/20 rounded-2xl p-4 flex justify-between items-center mt-2">
                         <div className="flex items-center gap-1.5 text-sm font-bold text-success/80">

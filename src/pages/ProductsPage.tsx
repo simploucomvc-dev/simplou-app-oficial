@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { formatCurrency } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Plus, Settings, Pencil, Trash2, Package, ShoppingBag, MoreVertical, Wrench, ChevronRight } from "lucide-react";
+import { Plus, Settings, Pencil, Trash2, Package, ShoppingBag, MoreVertical, Wrench, Boxes } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ICON_MAP, getProductIconName } from "@/lib/product-icons";
@@ -11,8 +11,6 @@ import { toast } from "sonner";
 import ProductModal from "@/components/ProductModal";
 import ProductDetailModal from "@/components/ProductDetailModal";
 import FixedCostsModal from "@/components/FixedCostsModal";
-import { calcFixedCostForProduct } from "@/lib/product-icons";
-import { getUSDRate } from "@/lib/exchange-rate";
 import { SafeDeleteDialog } from "@/components/ui/safe-delete-dialog";
 
 export interface Product {
@@ -24,6 +22,7 @@ export interface Product {
   description?: string;
   ignore_fixed_costs?: boolean;
   entry_type?: "product" | "service";
+  stock_quantity?: number | null;
 }
 
 export interface FixedCost {
@@ -79,7 +78,7 @@ function EntryTypeSelectorDialog({
 }
 
 export default function ProductsPage() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [fixedCosts, setFixedCosts] = useState<FixedCost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,31 +89,17 @@ export default function ProductsPage() {
   const [filterType, setFilterType] = useState<"all" | "product" | "service">("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
-  const [usdRate, setUsdRate] = useState(5.50);
 
-  const getProductCosts = (p: Product) => {
-    const fc = p.ignore_fixed_costs ? 0 : calcFixedCostForProduct(fixedCosts, Number(p.selling_price), Number(p.cost_price), usdRate);
-    const variable = Number(p.variable_cost) || 0;
-    const purchase = Number(p.cost_price) || 0;
-    return { fc, variable, purchase, total: fc + variable + purchase };
-  };
-
-  const calcProfit = (p: Product) => {
-    const { total } = getProductCosts(p);
-    return Number(p.selling_price) - total;
-  };
+  const calcProfit = (p: Product) => Number(p.selling_price) - Number(p.cost_price);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
-    const rateP = getUSDRate().catch(() => 5.50);
-    const [{ data: prods }, { data: costs }, rate] = await Promise.all([
+    const [{ data: prods }, { data: costs }] = await Promise.all([
       supabase.from("products").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("fixed_costs").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
-      rateP
     ]);
     setProducts(prods || []);
     setFixedCosts(costs || []);
-    setUsdRate(rate);
     setLoading(false);
   }, [user]);
 
@@ -186,39 +171,34 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <ShoppingBag size={20} /> Produtos e Serviços
-          </h1>
-          {profile?.company_name && (
-            <p className="text-sm text-muted-foreground mt-0.5">{profile.company_name}</p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setSelectorOpen(true)} size="sm" className="bg-brand-primary hover:bg-brand-hover text-white">
-            <Plus size={16} /> Novo
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setFixedCostsModal(true)}>
-            <Settings size={16} /> Meus Custos
-          </Button>
-        </div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold flex items-center gap-2">
+          <ShoppingBag size={20} /> Produtos e Serviços
+        </h1>
+        <Button onClick={() => setSelectorOpen(true)} size="sm" className="gap-2 bg-brand-primary hover:bg-brand-hover text-white">
+          <Plus size={16} /> Novo
+        </Button>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 bg-muted rounded-lg p-1 w-fit">
-        {(["all", "product", "service"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setFilterType(t)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${filterType === t
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-              }`}
-          >
-            {t === "all" ? "Todos" : t === "product" ? "Produtos" : "Serviços"}
-          </button>
-        ))}
+      {/* Filter tabs + Meus Custos */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1 bg-muted rounded-lg p-1 w-fit">
+          {(["all", "product", "service"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setFilterType(t)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${filterType === t
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+                }`}
+            >
+              {t === "all" ? "Todos" : t === "product" ? "Produtos" : "Serviços"}
+            </button>
+          ))}
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setFixedCostsModal(true)}>
+          <Settings size={16} /> Meus Custos
+        </Button>
       </div>
 
       {filteredProducts.length === 0 ? (
@@ -249,11 +229,26 @@ export default function ProductsPage() {
                         </span>
                       </div>
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        Custo: {formatCurrency(getProductCosts(p).total)} · Preço: {formatCurrency(Number(p.selling_price))}
+                        Custo: {formatCurrency(Number(p.cost_price))} · Preço: {formatCurrency(Number(p.selling_price))}
                       </p>
-                      <p className={`text-sm font-semibold mt-0.5 ${profit >= 0 ? "text-success" : "text-destructive"}`}>
-                        Lucro: {formatCurrency(profit)}
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <p className={`text-sm font-semibold ${profit >= 0 ? "text-success" : "text-destructive"}`}>
+                          Lucro: {formatCurrency(profit)}
+                        </p>
+                        {!isService && p.stock_quantity != null && (() => {
+                          const qty = p.stock_quantity!;
+                          const color = qty <= 0
+                            ? "bg-red-100 text-red-700"
+                            : qty <= 5
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-green-100 text-green-700";
+                          return (
+                            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${color}`}>
+                              <Boxes size={10} /> {qty} em estoque
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
                   <DropdownMenu>
@@ -293,8 +288,6 @@ export default function ProductsPage() {
         open={productModal.open}
         product={productModal.product}
         entryType={productModal.entryType || "product"}
-        fixedCosts={fixedCosts}
-        usdRate={usdRate}
         onClose={() => setProductModal({ open: false })}
         onSaved={fetchData}
       />
@@ -308,8 +301,6 @@ export default function ProductsPage() {
 
       <ProductDetailModal
         product={selectedProduct}
-        fixedCosts={fixedCosts}
-        usdRate={usdRate}
         onClose={() => setSelectedProduct(null)}
         onEdit={() => {
           if (selectedProduct) {
