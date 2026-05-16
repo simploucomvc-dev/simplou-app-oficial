@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import AppLayout from "@/components/AppLayout";
 import TrialExpiredScreen from "@/components/TrialExpiredScreen";
 import LoginPage from "@/pages/LoginPage";
@@ -23,8 +24,28 @@ function ScrollToTop() {
   return null;
 }
 
+function CheckoutRedirect() {
+  const { session } = useAuth();
+
+  useEffect(() => {
+    if (!session) return;
+    (async () => {
+      const { data } = await supabase.functions.invoke("create-checkout-session", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (data?.url) window.location.href = data.url;
+    })();
+  }, [session]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading, isTrialExpired } = useAuth();
+  const { user, loading, isTrialExpired, profile } = useAuth();
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -33,6 +54,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   );
 
   if (!user) return <Navigate to="/login" replace />;
+
+  if (profile?.subscription_status === "waiting") return <CheckoutRedirect />;
 
   if (isTrialExpired) return <TrialExpiredScreen />;
 
