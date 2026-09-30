@@ -14,6 +14,7 @@ import ProductsPage from "@/pages/ProductsPage";
 import TransactionsPage from "@/pages/TransactionsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import HelpPage from "@/pages/HelpPage";
+import ObrigadoPage from "@/pages/ObrigadoPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -80,7 +81,8 @@ const App = () => (
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/registro" element={<PublicRoute><RegisterPage /></PublicRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+            <Route path="/obrigado" element={<ObrigadoPage />} />
+            <Route path="/dashboard"element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="/produtos" element={<ProtectedRoute><ProductsPage /></ProtectedRoute>} />
             <Route path="/operacoes" element={<Navigate to="/financeiro" replace />} />
             <Route path="/financeiro" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
