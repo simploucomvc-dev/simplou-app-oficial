@@ -56,7 +56,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (profile?.subscription_status === "waiting") return <CheckoutRedirect />;
+  const isStaff = profile?.role === "super_admin" || profile?.role === "partner";
+  if (!isStaff && profile?.subscription_status === "waiting") return <CheckoutRedirect />;
 
   if (isTrialExpired) return <TrialExpiredScreen />;
 
