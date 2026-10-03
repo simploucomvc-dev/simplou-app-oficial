@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { trackSubscription } from "@/lib/tracking";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 30000;
@@ -10,9 +11,15 @@ const POLL_TIMEOUT_MS = 30000;
 export default function ObrigadoPage() {
   const { user, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [timedOut, setTimedOut] = useState(false);
 
   const isActive = ["active", "trialing"].includes(profile?.subscription_status ?? "");
+
+  useEffect(() => {
+    const sessionId = searchParams.get("session_id");
+    if (sessionId) trackSubscription(sessionId);
+  }, [searchParams]);
 
   // O webhook do Stripe pode levar alguns segundos pra atualizar o perfil
   useEffect(() => {

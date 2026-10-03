@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Eye, EyeOff, Check, X as XIcon, ArrowLeft, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { trackSignup } from "@/lib/tracking";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 function maskPhone(value: string): string {
@@ -174,6 +175,7 @@ export default function RegisterPage() {
         toast.error(error.message);
         return;
       }
+      await trackSignup();
       const { data: { session } } = await supabase.auth.getSession();
       const { data, error: checkoutError } = await supabase.functions.invoke("create-checkout-session", {
         headers: { Authorization: `Bearer ${session?.access_token}` },
