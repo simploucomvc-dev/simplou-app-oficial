@@ -12,6 +12,16 @@ import ProductModal from "@/components/ProductModal";
 import ProductDetailModal from "@/components/ProductDetailModal";
 import FixedCostsModal from "@/components/FixedCostsModal";
 import { SafeDeleteDialog } from "@/components/ui/safe-delete-dialog";
+import ProductCover from "@/components/products/ProductCover";
+import { cn } from "@/lib/utils";
+import { useSignedImageUrls } from "@/hooks/useSignedImageUrls";
+import {
+  PRODUCT_IMAGES_SELECT,
+  imageFilePaths,
+  removeImageFiles,
+  sortImages,
+  type ProductImage,
+} from "@/services/productImages";
 
 export interface Product {
   id: string;
@@ -23,6 +33,7 @@ export interface Product {
   ignore_fixed_costs?: boolean;
   entry_type?: "product" | "service";
   stock_quantity?: number | null;
+  product_images?: ProductImage[];
 }
 
 export interface FixedCost {
@@ -95,7 +106,7 @@ export default function ProductsPage() {
   const fetchData = useCallback(async () => {
     if (!user) return;
     const [{ data: prods }, { data: costs }] = await Promise.all([
-      supabase.from("products").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
+      supabase.from("products").select(`*, ${PRODUCT_IMAGES_SELECT}`).eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("fixed_costs").select("*").eq("user_id", user.id).order("created_at", { ascending: true }),
     ]);
     setProducts(prods || []);
@@ -105,10 +116,18 @@ export default function ProductsPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const deleteProduct = async (id: string) => {
-    const { error } = await supabase.from("products").delete().eq("id", id);
+  const coverThumbPaths = products.flatMap((p) => {
+    const cover = sortImages(p.product_images)[0];
+    return cover ? [cover.thumb_path] : [];
+  });
+  const coverUrls = useSignedImageUrls(coverThumbPaths);
+
+  const deleteProduct = async (product: Product) => {
+    const { error } = await supabase.from("products").delete().eq("id", product.id);
     if (error) toast.error("Erro ao excluir");
     else {
+      // As linhas de foto saem em cascata; os arquivos são apagados aqui
+      removeImageFiles(imageFilePaths(product.product_images ?? []));
       toast.success(`Excluído com sucesso`);
       fetchData();
       setDeleteDialogOpen(false);
@@ -213,13 +232,16 @@ export default function ProductsPage() {
             const profit = calcProfit(p);
             const isService = p.entry_type === "service";
             const DefaultIcon = isService ? Wrench : Package;
+            const cover = sortImages(p.product_images)[0];
             return (
               <div key={p.id} className="bg-card border border-border rounded-xl p-4 hover:border-brand-primary/30 hover:shadow-md transition-all duration-200 group">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3 flex-1 cursor-pointer" onClick={() => setSelectedProduct(p)}>
-                    <div className="w-10 h-10 rounded-xl bg-brand-light flex items-center justify-center shrink-0 mt-0.5">
-                      {(() => { const I = ICON_MAP[getProductIconName(p.id)] || DefaultIcon; return <I size={18} className="text-brand-hover" />; })()}
-                    </div>
+                    <ProductCover
+                      src={cover ? coverUrls[cover.thumb_path] : undefined}
+                      Icon={ICON_MAP[getProductIconName(p.id)] || DefaultIcon}
+                      className={cn("mt-0.5", cover ? "w-14 h-14" : "w-10 h-10")}
+                    />
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold group-hover:text-brand-hover transition-colors">{p.name}</h3>
@@ -319,7 +341,7 @@ export default function ProductsPage() {
       <SafeDeleteDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
-        onConfirm={() => productToDelete && deleteProduct(productToDelete.id)}
+        onConfirm={() => productToDelete && deleteProduct(productToDelete)}
         title="Aviso: Exclusão Permanente"
         itemName={productToDelete?.name || ""}
       />

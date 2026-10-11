@@ -13,6 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ExpandableInput } from "@/components/ui/expandable-input";
 import { cn } from "@/lib/utils";
 import type { Product } from "@/pages/ProductsPage";
+import ProductImagesField from "@/components/products/ProductImagesField";
+import { useProductImagesDraft } from "@/hooks/useProductImagesDraft";
 
 interface Props {
   open: boolean;
@@ -38,6 +40,7 @@ export default function ProductModal({ open, product, entryType = "product", onC
   const [saving, setSaving] = useState(false);
   const [localEntryType, setLocalEntryType] = useState<"product" | "service">(product?.entry_type || entryType);
   const [stockQuantity, setStockQuantity] = useState<string>(product?.stock_quantity != null ? String(product.stock_quantity) : "");
+  const imagesDraft = useProductImagesDraft(product?.product_images, open);
 
   useEffect(() => {
     if (!open) return;
@@ -65,6 +68,7 @@ export default function ProductModal({ open, product, entryType = "product", onC
     if (!name.trim()) { toast.error("Nome é obrigatório"); return; }
     if (cp < 0 || sp < 0) { toast.error("Valores não podem ser negativos"); return; }
     if (!user) return;
+    if (imagesDraft.isProcessing) { toast.error("Aguarde as fotos terminarem de carregar"); return; }
 
     setSaving(true);
 
@@ -79,6 +83,7 @@ export default function ProductModal({ open, product, entryType = "product", onC
       stock_quantity: localEntryType === "product" ? parsedStock : null,
     };
 
+    let productId: string;
     if (product) {
       const { error } = await supabase.from("products").update(data).eq("id", product.id);
       if (error) {
@@ -86,7 +91,7 @@ export default function ProductModal({ open, product, entryType = "product", onC
         toast.error("Erro ao salvar produto");
         return;
       }
-      setProductIcon(product.id, selectedIcon);
+      productId = product.id;
     } else {
       const { data: saved, error } = await supabase.from("products").insert(data).select("id").single();
       if (error || !saved) {
@@ -94,11 +99,26 @@ export default function ProductModal({ open, product, entryType = "product", onC
         toast.error("Erro ao salvar produto");
         return;
       }
-      setProductIcon(saved.id, selectedIcon);
+      productId = saved.id;
+    }
+    setProductIcon(productId, selectedIcon);
+
+    // O produto já está salvo: se as fotos falharem, avisa sem perder o resto
+    let imagesFailed = false;
+    try {
+      await imagesDraft.save(user.id, productId);
+    } catch {
+      imagesFailed = true;
     }
 
     setSaving(false);
     const isService = localEntryType === "service";
+    if (imagesFailed) {
+      toast.warning(`${isService ? "Serviço salvo" : "Produto salvo"}, mas as fotos não foram enviadas. Verifique sua conexão e tente editar de novo.`);
+      onSaved();
+      onClose();
+      return;
+    }
     toast.success(product ? (isService ? "Serviço atualizado!" : "Produto atualizado!") : (isService ? "Serviço criado!" : "Produto criado!"));
     onSaved();
     onClose();
@@ -185,6 +205,8 @@ export default function ProductModal({ open, product, entryType = "product", onC
               </Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Bolo de chocolate" className="h-11" />
             </div>
+
+            <ProductImagesField draft={imagesDraft} />
 
             {/* Descrição */}
             <div>
@@ -285,7 +307,7 @@ export default function ProductModal({ open, product, entryType = "product", onC
         <div className="px-6 py-4 border-t border-border shrink-0">
           <div className="flex gap-3">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
-            <Button className="flex-1 bg-brand-primary hover:bg-brand-hover text-white" onClick={handleSave} disabled={saving}>
+            <Button className="flex-1 bg-brand-primary hover:bg-brand-hover text-white" onClick={handleSave} disabled={saving || imagesDraft.isProcessing}>
               {saving ? "Salvando..." : (localEntryType === "service" ? "Salvar Serviço" : "Salvar Produto")}
             </Button>
           </div>

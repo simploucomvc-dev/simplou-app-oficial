@@ -4,6 +4,7 @@ import { formatCurrency } from "@/lib/format";
 import { ICON_MAP, getProductIconName } from "@/lib/product-icons";
 import { Package, Pencil, Trash2, AlignLeft, Sparkles, Boxes } from "lucide-react";
 import type { Product } from "@/pages/ProductsPage";
+import ProductImageGallery from "@/components/products/ProductImageGallery";
 
 interface Props {
     product: Product | null;
@@ -20,7 +21,7 @@ export default function ProductDetailModal({ product, onClose, onEdit, onDelete 
 
     return (
         <Dialog open={!!product} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl font-bold">
                         <div className="w-10 h-10 rounded-xl bg-brand-light flex items-center justify-center text-brand-hover shrink-0">
@@ -31,6 +32,8 @@ export default function ProductDetailModal({ product, onClose, onEdit, onDelete 
                 </DialogHeader>
 
                 <div className="space-y-4 mt-2">
+                    <ProductImageGallery images={product.product_images} alt={product.name} />
+
                     {product.description && (
                         <div className="bg-muted/50 rounded-lg p-3 text-sm text-foreground flex gap-2">
                             <AlignLeft size={16} className="text-muted-foreground shrink-0 mt-0.5" />

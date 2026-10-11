@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { X as XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { listUserImagePaths, removeImageFiles } from "@/services/productImages";
 import {
   Dialog,
   DialogContent,
@@ -404,11 +405,13 @@ export default function SettingsPage() {
     if (!user) return;
     setIsDeletingData(true);
     try {
+      const imagePaths = await listUserImagePaths(user.id).catch(() => []);
       await Promise.all([
         supabase.from("transactions").delete().eq("user_id", user.id),
         supabase.from("products").delete().eq("user_id", user.id),
         supabase.from("fixed_costs").delete().eq("user_id", user.id),
       ]);
+      await removeImageFiles(imagePaths);
       toast.success("Todos os seus dados foram limpos!");
       setSafeDialog(prev => ({ ...prev, open: false }));
     } catch (error) {
@@ -422,7 +425,9 @@ export default function SettingsPage() {
     if (!user) return;
     setIsDeletingAccount(true);
     try {
-      // 1. Clear all data first
+      // 1. Clear all data first (arquivos de foto antes do perfil, enquanto o acesso ainda vale)
+      const imagePaths = await listUserImagePaths(user.id).catch(() => []);
+      await removeImageFiles(imagePaths);
       await Promise.all([
         supabase.from("transactions").delete().eq("user_id", user.id),
         supabase.from("products").delete().eq("user_id", user.id),
