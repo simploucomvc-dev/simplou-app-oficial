@@ -22,6 +22,7 @@ import { format, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale/pt-BR";
 import { maskBRL, parseBRL } from "@/lib/product-icons";
 import { getUSDRate } from "@/lib/exchange-rate";
+import { ATTACHMENT_ACCEPT, uploadTransactionAttachment, validateAttachment } from "@/services/transactionAttachments";
 
 export interface VariableCostRef {
   variable_cost_id: string;
@@ -51,7 +52,7 @@ export interface Transaction {
   product_id?: string | null;
   products?: { id: string; name: string } | null;
   transaction_products?: { product_id: string; products: { id: string; name: string } | null }[];
-  attachment_url?: string | null;
+  attachment_path?: string | null;
   ignore_fixed_costs?: boolean;
   transaction_variable_costs?: VariableCostRef[];
   transaction_fixed_costs?: FixedCostRef[];
@@ -332,24 +333,11 @@ export default function TransactionsPage() {
 
     if (attachmentFile && insertedData && insertedData.length > 0) {
       try {
-        const firstTx = insertedData[0];
-        const fileExt = attachmentFile.name.split('.').pop();
-        const filePath = `${user.id}/${firstTx.id}.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('transaction-attachments')
-          .upload(filePath, attachmentFile, { upsert: true });
-
-        if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage
-            .from('transaction-attachments')
-            .getPublicUrl(filePath);
-
-          await supabase
-            .from('transactions')
-            .update({ attachment_url: publicUrlData.publicUrl })
-            .eq('id', firstTx.id);
-        }
+        await uploadTransactionAttachment({
+          userId: user.id,
+          transactionId: insertedData[0].id,
+          file: attachmentFile,
+        });
       } catch (err) {
         toast.error("Erro ao enviar o anexo, mas a operação foi salva.");
       }
@@ -1125,12 +1113,13 @@ export default function TransactionsPage() {
                 <div className="px-4 pb-4 pt-3 border-t border-border">
                   <Input
                     type="file"
-                    accept=".jpg,.jpeg,.png,.pdf"
+                    accept={ATTACHMENT_ACCEPT}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      if (file.size > 2 * 1024 * 1024) {
-                        toast.error("O arquivo deve ter no máximo 2MB.");
+                      const validationError = validateAttachment(file);
+                      if (validationError) {
+                        toast.error(validationError);
                         e.target.value = "";
                         return;
                       }

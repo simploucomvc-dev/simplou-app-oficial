@@ -19,6 +19,7 @@ import { calcFixedCostForProduct } from "@/lib/product-icons";
 import { SafeDeleteDialog } from "@/components/ui/safe-delete-dialog";
 import { Download, FileText, Link as LinkIcon, File, Loader2 } from "lucide-react";
 import html2pdf from "html2pdf.js";
+import { ATTACHMENT_ACCEPT, getAttachmentSignedUrl, uploadTransactionAttachment, validateAttachment } from "@/services/transactionAttachments";
 
 interface Props {
   transaction: Transaction | null;
@@ -109,14 +110,11 @@ export default function TransactionDetailModal({ transaction, availableProducts,
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { // Proteção ao free tier - 2MB
-      toast.error("O arquivo deve ter no máximo 2MB.");
-      return;
-    }
-    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error("Apenas JPG, PNG e PDF são permitidos.");
+    const validationError = validateAttachment(file);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
@@ -125,25 +123,12 @@ export default function TransactionDetailModal({ transaction, availableProducts,
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error("Usuário não autenticado");
 
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${userData.user.id}/${transaction.id}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('transaction-attachments')
-        .upload(filePath, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage
-        .from('transaction-attachments')
-        .getPublicUrl(filePath);
-
-      const { error: updateError } = await supabase
-        .from('transactions')
-        .update({ attachment_url: publicUrlData.publicUrl })
-        .eq('id', transaction.id);
-
-      if (updateError) throw updateError;
+      await uploadTransactionAttachment({
+        userId: userData.user.id,
+        transactionId: transaction.id,
+        file,
+        previousPath: transaction.attachment_path,
+      });
 
       toast.success("Anexo salvo com sucesso!");
       onChanged(); // Refresh data
@@ -151,6 +136,21 @@ export default function TransactionDetailModal({ transaction, availableProducts,
       toast.error("Erro ao anexar arquivo: " + err.message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const openAttachment = async () => {
+    if (!transaction.attachment_path) return;
+    // Abre a aba já no clique (senão o navegador bloqueia o pop-up depois do await)
+    const win = window.open("about:blank", "_blank");
+    if (win) win.opener = null;
+    try {
+      const url = await getAttachmentSignedUrl(transaction.attachment_path);
+      if (win) win.location.href = url;
+      else window.location.href = url;
+    } catch {
+      win?.close();
+      toast.error("Não foi possível abrir o anexo. Tente novamente.");
     }
   };
 
@@ -204,7 +204,7 @@ export default function TransactionDetailModal({ transaction, availableProducts,
       // @ts-ignore
       + "ID,Nome,Descricao,Valor,Data,Tipo,Produto,Anexo\n"
       // @ts-ignore
-      + `${transaction.id},"${transaction.name}","${transaction.description || ''}",${transaction.value},${transaction.date},${transaction.type},"${transaction.products?.name || ''}","${transaction.attachment_url || ''}"`;
+      + `${transaction.id},"${transaction.name}","${transaction.description || ''}",${transaction.value},${transaction.date},${transaction.type},"${transaction.products?.name || ''}","${transaction.attachment_path ? 'Sim' : 'Não'}"`;
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -395,19 +395,16 @@ export default function TransactionDetailModal({ transaction, availableProducts,
                 );
               })()}
 
-              {/* @ts-ignore */}
-              {transaction.attachment_url && (
+              {transaction.attachment_path && (
                 <div>
                   <p className="text-xs text-muted-foreground">Comprovante / Anexo</p>
-                  <a
-                    // @ts-ignore
-                    href={transaction.attachment_url}
-                    target="_blank"
-                    rel="noreferrer"
+                  <button
+                    type="button"
+                    onClick={openAttachment}
                     className="inline-flex items-center gap-1.5 text-sm font-semibold bg-accent text-accent-foreground px-3 py-1 rounded-full mt-1 hover:bg-accent/80 transition-colors"
                   >
                     <LinkIcon size={13} /> Ver Anexo
-                  </a>
+                  </button>
                 </div>
               )}
             </div>
@@ -586,12 +583,12 @@ export default function TransactionDetailModal({ transaction, availableProducts,
             </div>
             <div className="bg-muted/30 border border-border rounded-lg p-3">
               <Label className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-2">
-                <File size={13} /> {transaction.attachment_url ? "Alterar Comprovante" : "Anexar Comprovante"} <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+                <File size={13} /> {transaction.attachment_path ? "Alterar Comprovante" : "Anexar Comprovante"} <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
               </Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="file"
-                  accept=".jpg,.jpeg,.png,.pdf"
+                  accept={ATTACHMENT_ACCEPT}
                   onChange={handleFileUpload}
                   disabled={uploading}
                   className="text-xs flex-1 h-9 cursor-pointer file:cursor-pointer"
