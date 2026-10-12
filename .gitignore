@@ -31,3 +31,7 @@ dist-ssr
 *.sw?
 
 .claude/settings.local.json
+
+# Playwright
+test-results
+playwright-report
