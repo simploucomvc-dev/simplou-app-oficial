@@ -21,9 +21,10 @@ export default function ProductDetailModal({ product, onClose, onEdit, onDelete 
 
     return (
         <Dialog open={!!product} onOpenChange={(open) => { if (!open) onClose(); }}>
-            <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+            <DialogContent className="max-w-md w-[95vw] max-h-[90dvh] overflow-hidden flex flex-col gap-0 p-0 rounded-2xl">
+                {/* Cabeçalho fixo */}
+                <DialogHeader className="px-6 pt-6 pb-4 border-b shrink-0">
+                    <DialogTitle className="flex items-center gap-2 text-xl font-bold pr-6">
                         <div className="w-10 h-10 rounded-xl bg-brand-light flex items-center justify-center text-brand-hover shrink-0">
                             <IconComponent size={20} />
                         </div>
@@ -31,7 +32,8 @@ export default function ProductDetailModal({ product, onClose, onEdit, onDelete 
                     </DialogTitle>
                 </DialogHeader>
 
-                <div className="space-y-4 mt-2">
+                {/* Conteúdo com rolagem interna */}
+                <div data-testid="product-detail-scroll" className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
                     <ProductImageGallery images={product.product_images} alt={product.name} />
 
                     {product.description && (
@@ -70,7 +72,7 @@ export default function ProductDetailModal({ product, onClose, onEdit, onDelete 
                         );
                       })()}
 
-                    <div className="bg-success/5 border border-success/20 rounded-2xl p-4 flex justify-between items-center mt-2">
+                    <div className="bg-success/5 border border-success/20 rounded-2xl p-4 flex justify-between items-center">
                         <div className="flex items-center gap-1.5 text-sm font-bold text-success/80">
                             <Sparkles size={16} /> Lucro líquido
                         </div>
@@ -78,8 +80,11 @@ export default function ProductDetailModal({ product, onClose, onEdit, onDelete 
                             {formatCurrency(profit)}
                         </p>
                     </div>
+                </div>
 
-                    <div className="flex gap-3 pt-2">
+                {/* Rodapé fixo */}
+                <div className="px-6 py-4 border-t shrink-0">
+                    <div className="flex gap-3">
                         <Button variant="outline" className="flex-1 gap-2" onClick={onEdit}>
                             <Pencil size={15} /> Editar
                         </Button>
