@@ -192,4 +192,60 @@ test.describe("Fotos de produtos", () => {
     await expect(dialog.getByRole("img", { name: /foto 1/ })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Ver foto 2" })).toBeVisible();
   });
+
+  test("detalhe: rolagem fica dentro do modal e os botões sempre visíveis", async ({ page }) => {
+    await mockSupabase(page, [existingProduct(3)]);
+    await gotoProducts(page);
+    await page.getByText("Relógio Clássico").click();
+    const dialog = page.getByRole("dialog");
+
+    // Quem rola é o conteúdo, não o modal inteiro
+    const scroll = dialog.getByTestId("product-detail-scroll");
+    expect(await scroll.evaluate((el) => getComputedStyle(el).overflowY)).toBe("auto");
+    expect(await dialog.evaluate((el) => getComputedStyle(el).overflowY)).toBe("hidden");
+
+    // Modal cabe na tela e Editar/Excluir aparecem sem rolar
+    const box = await dialog.boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    await expect(dialog.getByRole("button", { name: "Editar" })).toBeInViewport();
+    await expect(dialog.getByRole("button", { name: "Excluir" })).toBeInViewport();
+  });
+
+  test("detalhe: setas trocam a foto no computador e somem no celular", async ({ page, isMobile }) => {
+    await mockSupabase(page, [existingProduct(3)]);
+    await gotoProducts(page);
+    await page.getByText("Relógio Clássico").click();
+    const dialog = page.getByRole("dialog");
+    const next = dialog.getByRole("button", { name: "Próxima foto" });
+    const prev = dialog.getByRole("button", { name: "Foto anterior" });
+    const dot = (n: number) => dialog.getByRole("button", { name: `Ver foto ${n}` });
+
+    if (isMobile) {
+      await expect(next).toBeHidden();
+      await expect(prev).toBeHidden();
+      return;
+    }
+
+    await expect(dot(1)).toHaveAttribute("aria-current", "true");
+    await expect(prev).toBeDisabled();
+
+    await next.click();
+    await expect(dot(2)).toHaveAttribute("aria-current", "true");
+    await next.click();
+    await expect(dot(3)).toHaveAttribute("aria-current", "true");
+    await expect(next).toBeDisabled();
+
+    await prev.click();
+    await expect(dot(2)).toHaveAttribute("aria-current", "true");
+  });
+
+  test("detalhe: produto com uma foto só não mostra setas", async ({ page }) => {
+    await mockSupabase(page, [existingProduct(1)]);
+    await gotoProducts(page);
+    await page.getByText("Relógio Clássico").click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("img", { name: "Relógio Clássico" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Próxima foto" })).toHaveCount(0);
+  });
 });
