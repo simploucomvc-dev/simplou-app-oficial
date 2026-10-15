@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import { sortImages, type ProductImage } from "@/services/productImages";
 import { useSignedImageUrls } from "@/hooks/useSignedImageUrls";
@@ -40,6 +47,19 @@ export default function ProductImageGallery({ images, alt }: { images: ProductIm
             </CarouselItem>
           ))}
         </CarouselContent>
+        {/* Setas só no computador; no celular a navegação é pelo arraste */}
+        {sorted.length > 1 && (
+          <>
+            <CarouselPrevious
+              aria-label="Foto anterior"
+              className="hidden sm:inline-flex left-2 bg-background/80 backdrop-blur-sm shadow-sm disabled:opacity-0"
+            />
+            <CarouselNext
+              aria-label="Próxima foto"
+              className="hidden sm:inline-flex right-2 bg-background/80 backdrop-blur-sm shadow-sm disabled:opacity-0"
+            />
+          </>
+        )}
       </Carousel>
 
       {sorted.length > 1 && (
@@ -49,6 +69,7 @@ export default function ProductImageGallery({ images, alt }: { images: ProductIm
               key={img.id}
               type="button"
               onClick={() => api?.scrollTo(index)}
+              aria-current={index === current ? "true" : undefined}
               className={cn("w-2 h-2 rounded-full transition-colors", index === current ? "bg-brand-primary" : "bg-muted-foreground/30")}
               aria-label={`Ver foto ${index + 1}`}
             />
